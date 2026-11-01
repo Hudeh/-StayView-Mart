@@ -393,12 +393,19 @@ export default function TillPage() {
               onClick={async () => {
                 const counted = window.prompt("Counted cash in the drawer", "0");
                 if (counted == null) return;
-                await closeDrawer({ variables: { closingCash: counted } });
-                drawerQuery.refetch();
+                setError("");
+                try {
+                  await closeDrawer({ variables: { closingCash: counted } });
+                  setNotice("Shift ended");
+                  drawerQuery.refetch();
+                  heldQuery.refetch();
+                } catch (err) {
+                  setError(errorText(err));
+                }
               }}
               disabled={closing}
             >
-              Close drawer
+              {closing ? "Ending shift…" : "End shift"}
             </button>
           )}
           <button

@@ -37,6 +37,12 @@ button { cursor: pointer; }
   border-radius: 16px; box-shadow: 0 8px 30px rgba(94, 59, 183, 0.12);
 }
 .login h1 { margin: 0 0 8px; color: var(--brand-dark); }
+.brand {
+  display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 0 12px;
+}
+.brand-logo { height: 44px; width: 118px; color: var(--ink); display: block; }
+.brand-sep { color: var(--muted); font-size: 22px; font-weight: 600; line-height: 1; }
+.brand-product { color: var(--brand-dark); font-size: 28px; font-weight: 700; letter-spacing: -0.5px; }
 .login p { color: var(--muted); }
 .login p.ok { color: var(--brand); }
 label { display: block; margin-top: 14px; font-size: 13px; color: var(--brand-dark); }

@@ -3,6 +3,7 @@
 import { gql, useMutation } from "@apollo/client";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
+import { StayViewMartMark } from "@/components/StayViewMark";
 import { getPropertyCode, propertyPath } from "@/lib/property";
 import { setSession } from "@/lib/session";
 
@@ -50,9 +51,8 @@ export default function LoginPage() {
 
   return (
     <form className="login" onSubmit={onSubmit}>
-      <h1>StayView Mart</h1>
-      <p>Staff sign-in for the counter. Shoppers do not need an account.</p>
-      {property ? <p className="ok">Property {property}</p> : null}
+      <StayViewMartMark />
+      <p>Welcome to StayView Mart!</p>
       <label>
         Username
         <input value={username} onChange={(event) => setUsername(event.target.value)} autoFocus />

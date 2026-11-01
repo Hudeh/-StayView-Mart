@@ -4,6 +4,7 @@ import { ApolloProvider } from "@apollo/client";
 import { useEffect, useMemo, useState } from "react";
 import { apiReadyFor, resolveBranchApi } from "@/lib/api";
 import { createMartClient } from "@/lib/apollo";
+import { StayViewMartMark } from "@/components/StayViewMark";
 import { getPropertyCode } from "@/lib/property";
 
 function BranchApiGate({ children }: { children: React.ReactNode }) {
@@ -38,7 +39,7 @@ function BranchApiGate({ children }: { children: React.ReactNode }) {
   if (state === "ready") return children;
   return (
     <main className="login">
-      <h1>StayView Mart</h1>
+      <StayViewMartMark />
       {state === "pending" ? <p>Finding this property…</p> : null}
       {state === "missing" ? (
         <p>Open this till from the property address. The property code is part of that address.</p>
