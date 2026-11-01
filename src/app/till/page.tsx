@@ -3,8 +3,11 @@
 import { gql, useLazyQuery, useMutation, useQuery } from "@apollo/client";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { StayViewMartMark } from "@/components/StayViewMark";
 import { propertyPath } from "@/lib/property";
 import { cashierName, clearSession, getToken } from "@/lib/session";
+
+const LOCK_KEY = "mart-screen-locked";
 
 const DRAWER = gql`
   query currentMartDrawer {
@@ -83,6 +86,24 @@ const HOLD = gql`
   }
 `;
 
+const CASHIER = gql`
+  query currentMartCashier {
+    currentMartCashier { fullName photoUrl }
+  }
+`;
+
+const TILL_TAX = gql`
+  query martTillTax {
+    martTillTax { ratePercent flatAmount label }
+  }
+`;
+
+const UNLOCK = gql`
+  mutation unlockMartTill($userPin: String!) {
+    unlockMartTill(userPin: $userPin) { success message }
+  }
+`;
+
 const VOID = gql`
   mutation voidMartTicket($saleId: ID!, $managerPin: String!, $reason: String) {
     voidMartTicket(saleId: $saleId, managerPin: $managerPin, reason: $reason) {
@@ -146,7 +167,9 @@ export default function TillPage() {
   const [hits, setHits] = useState<Item[]>([]);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [discount, setDiscount] = useState("0");
-  const [taxRate, setTaxRate] = useState("0");
+  const [locked, setLocked] = useState(false);
+  const [pin, setPin] = useState("");
+  const [pinError, setPinError] = useState("");
   const [cash, setCash] = useState("");
   const [card, setCard] = useState("");
   const [transfer, setTransfer] = useState("");
@@ -158,6 +181,8 @@ export default function TillPage() {
   const [working, setWorking] = useState<"pay" | "hold" | null>(null);
 
   const drawerQuery = useQuery(DRAWER, { skip: !getToken() });
+  const cashierQuery = useQuery(CASHIER, { skip: !getToken() });
+  const taxQuery = useQuery(TILL_TAX, { skip: !getToken() });
   const heldQuery = useQuery(HELD, { skip: !getToken(), pollInterval: 60000 });
   const [lookup] = useLazyQuery(LOOKUP);
   const [search] = useLazyQuery(SEARCH);
@@ -166,15 +191,29 @@ export default function TillPage() {
   const [completeSale] = useMutation(COMPLETE);
   const [holdTicket] = useMutation(HOLD);
   const [voidTicket, { loading: voiding }] = useMutation(VOID);
+  const [unlockTill, { loading: unlocking }] = useMutation(UNLOCK);
 
   useEffect(() => {
     if (!getToken()) router.replace(propertyPath("/login"));
+    else setLocked(sessionStorage.getItem(LOCK_KEY) === "1");
   }, [router]);
 
   const drawer = drawerQuery.data?.currentMartDrawer;
+  const cashier = cashierQuery.data?.currentMartCashier;
+  const displayName = cashier?.fullName || cashierName();
+  const photoUrl = cashier?.photoUrl || "";
+  const initials = displayName
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || "")
+    .join("");
+  const taxInfo = taxQuery.data?.martTillTax;
+  const taxRate = Number(taxInfo?.ratePercent) || 0;
+  const taxFlat = Number(taxInfo?.flatAmount) || 0;
   const subtotal = cart.reduce((sum, line) => sum + Number(line.unitPrice) * line.quantity, 0);
   const discountValue = Math.min(subtotal, Math.max(0, Number(discount) || 0));
-  const tax = ((subtotal - discountValue) * (Number(taxRate) || 0)) / 100;
+  const tax = ((subtotal - discountValue) * taxRate) / 100 + taxFlat;
   const due = subtotal - discountValue + tax;
   const tendered = (Number(cash) || 0) + (Number(card) || 0) + (Number(transfer) || 0);
   const change = Math.max(0, tendered - due);
@@ -284,7 +323,7 @@ export default function TillPage() {
           lines: lineInput,
           payments: payments(),
           discount: String(discountValue),
-          taxRate: taxRate || "0",
+          taxRate: String(taxRate || 0),
           heldSaleId: heldId,
         },
       });
@@ -371,7 +410,14 @@ export default function TillPage() {
     <div className="shell">
       <header className="top">
         <strong>StayView Mart</strong>
-        <span>{cashierName()}</span>
+        <span className="who">
+          {photoUrl ? (
+            <img className="avatar" src={photoUrl} alt="" />
+          ) : (
+            <span className="avatar" aria-hidden="true">{initials || "M"}</span>
+          )}
+          <span>{displayName}</span>
+        </span>
         <div className="row no-print">
           {!drawer ? (
             <>
@@ -411,6 +457,18 @@ export default function TillPage() {
           <button
             type="button"
             onClick={() => {
+              sessionStorage.setItem(LOCK_KEY, "1");
+              setPin("");
+              setPinError("");
+              setLocked(true);
+            }}
+          >
+            Lock
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              sessionStorage.removeItem(LOCK_KEY);
               clearSession();
               router.replace(propertyPath("/login"));
             }}
@@ -501,8 +559,8 @@ export default function TillPage() {
             <span>Subtotal</span><span>{money(subtotal)}</span>
             <label>Discount</label>
             <input value={discount} onChange={(event) => setDiscount(event.target.value)} />
-            <label>Tax %</label>
-            <input value={taxRate} onChange={(event) => setTaxRate(event.target.value)} />
+            <span>Tax{taxInfo?.label ? ` (${taxInfo.label})` : ""}</span>
+            <span>{money(tax)}</span>
             <span>Due</span><span className="due">{money(due)}</span>
           </div>
           <div className="row" style={{ marginTop: 12 }}>
@@ -532,6 +590,48 @@ export default function TillPage() {
           </div>
         </section>
       </main>
+      {locked ? (
+        <div className="lock">
+          <form
+            className="lock-card"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              setPinError("");
+              try {
+                const result = await unlockTill({ variables: { userPin: pin } });
+                const payload = result.data?.unlockMartTill;
+                if (payload?.success) {
+                  sessionStorage.removeItem(LOCK_KEY);
+                  setLocked(false);
+                  setPin("");
+                  return;
+                }
+                setPinError(payload?.message || "Invalid PIN. Please try again.");
+              } catch (err) {
+                setPinError(errorText(err));
+              }
+            }}
+          >
+            <StayViewMartMark />
+            <p>{displayName}</p>
+            <label>
+              PIN
+              <input
+                value={pin}
+                onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={4}
+                autoFocus
+              />
+            </label>
+            <button className="primary full" type="submit" disabled={pin.length !== 4 || unlocking}>
+              {unlocking ? "Checking…" : "Unlock"}
+            </button>
+            <p className="error">{pinError}</p>
+          </form>
+        </div>
+      ) : null}
     </div>
   );
 }
