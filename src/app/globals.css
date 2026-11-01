@@ -35,14 +35,38 @@ button { cursor: pointer; }
 }
 .top span.avatar { color: var(--brand-dark); }
 .lock {
-  position: fixed; inset: 0; background: var(--background); z-index: 20;
+  position: fixed; inset: 0; z-index: 20;
   display: flex; align-items: center; justify-content: center; padding: 16px;
+  background: linear-gradient(145deg, #5a3fa0 0%, #7352c7 45%, #8b6fd9 100%);
 }
 .lock-card {
-  width: min(420px, 100%); background: var(--surface); padding: 28px; border-radius: 16px;
-  box-shadow: 0 8px 30px rgba(94, 59, 183, 0.12);
+  width: min(480px, 100%); background: var(--surface); padding: 32px; border-radius: 24px;
+  box-shadow: 0 16px 40px rgba(20, 18, 31, 0.28); text-align: center;
 }
+.lock-card h2 { margin: 8px 0 4px; color: var(--ink); }
 .lock-card p { color: var(--muted); text-align: center; }
+.lock-name { font-weight: 700; color: var(--ink); }
+.lock-badge {
+  width: 80px; height: 80px; margin: 8px auto; border-radius: 50%;
+  background: var(--brand); color: #fff; display: flex; align-items: center; justify-content: center;
+}
+.pin-row { display: flex; justify-content: center; gap: 16px; margin: 20px 0 8px; }
+input.pin-box {
+  width: 60px; margin: 0; padding: 16px 0; text-align: center;
+  font-size: 24px; font-weight: 700; border-width: 2px; border-color: #d0d0d0;
+}
+input.pin-box:focus { outline: none; border-color: var(--brand); }
+input.pin-box.bad { border-color: var(--danger); }
+.modal-back {
+  position: fixed; inset: 0; z-index: 15; background: rgba(20, 18, 31, 0.45);
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.modal {
+  width: min(420px, 100%); background: var(--surface); border-radius: 16px; padding: 24px;
+  box-shadow: 0 16px 40px rgba(20, 18, 31, 0.28);
+}
+.modal h2 { margin: 0 0 8px; color: var(--brand-dark); }
+.modal p { color: var(--muted); }
 .top button {
   background: transparent; border: 1px solid var(--brand-light); border-radius: 8px; padding: 6px 10px;
 }
@@ -122,7 +146,11 @@ input:focus, select:focus { outline: 2px solid var(--brand-light); border-color:
 }
 .actions { display: flex; gap: 8px; margin-top: 12px; }
 .actions button { flex: 1; }
-.receipt { margin-top: 12px; padding: 12px; background: var(--tint); border-radius: 12px; }
+.receipt { margin-top: 12px; padding: 12px; background: white; border-radius: 12px; border: 1px solid var(--border); }
+.receipt-slip {
+  margin: 0; font-family: "Courier New", monospace; font-size: 12px; line-height: 1.4;
+  white-space: pre-wrap; width: 80mm; max-width: 100%; color: black;
+}
 @media print {
   .top, .scan, .pay, .actions, .no-print { display: none !important; }
   .till { display: block; }

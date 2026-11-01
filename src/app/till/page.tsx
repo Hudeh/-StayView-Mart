@@ -3,8 +3,10 @@
 import { gql, useLazyQuery, useMutation, useQuery } from "@apollo/client";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { PinDigits } from "@/components/PinDigits";
 import { StayViewMartMark } from "@/components/StayViewMark";
-import { propertyPath } from "@/lib/property";
+import { propertyPath, getPropertyCode } from "@/lib/property";
+import { buildMartReceipt, printMartReceipt, receiptBranch } from "@/lib/receipt";
 import { cashierName, clearSession, getToken } from "@/lib/session";
 
 const LOCK_KEY = "mart-screen-locked";
@@ -27,6 +29,18 @@ const SEARCH = gql`
   query searchMartCatalog($term: String!) {
     searchMartCatalog(term: $term) {
       productId variantId name barcode sku unitPrice unitOfMeasure quantityOnHand
+    }
+  }
+`;
+
+const HEADER = gql`
+  query martReceiptHeader($branchAlias: String!) {
+    branchAddresses(branchAlias: $branchAlias) {
+      branchEmail branchPhone branchPhoneMobile branchCity branchState branchCountry branchAddress branchWebsiteUrl isPrimary
+    }
+    getBusinessBranch(branchAlias: $branchAlias) {
+      status
+      data { branchAlias business { businessName } }
     }
   }
 `;
@@ -70,7 +84,7 @@ const COMPLETE = gql`
       heldSaleId: $heldSaleId
     ) {
       sale {
-        id receiptNumber total changeAmount
+        id receiptNumber subtotal discountAmount taxAmount total changeAmount
         lines { name quantity unitPrice lineTotal }
         payments { method amount }
       }
@@ -127,6 +141,9 @@ type CartLine = Item & { quantity: number };
 type Sale = {
   id: string;
   receiptNumber: string;
+  subtotal?: string;
+  discountAmount?: string;
+  taxAmount?: string;
   total: string;
   changeAmount?: string;
   status?: string;
@@ -168,8 +185,11 @@ export default function TillPage() {
   const [cart, setCart] = useState<CartLine[]>([]);
   const [discount, setDiscount] = useState("0");
   const [locked, setLocked] = useState(false);
-  const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState("");
+  const [pinReset, setPinReset] = useState(0);
+  const [shiftOpen, setShiftOpen] = useState(false);
+  const [countedCash, setCountedCash] = useState("0");
+  const [shiftError, setShiftError] = useState("");
   const [cash, setCash] = useState("");
   const [card, setCard] = useState("");
   const [transfer, setTransfer] = useState("");
@@ -183,6 +203,10 @@ export default function TillPage() {
   const drawerQuery = useQuery(DRAWER, { skip: !getToken() });
   const cashierQuery = useQuery(CASHIER, { skip: !getToken() });
   const taxQuery = useQuery(TILL_TAX, { skip: !getToken() });
+  const headerQuery = useQuery(HEADER, {
+    variables: { branchAlias: getPropertyCode() },
+    skip: !getToken() || !getPropertyCode(),
+  });
   const heldQuery = useQuery(HELD, { skip: !getToken(), pollInterval: 60000 });
   const [lookup] = useLazyQuery(LOOKUP);
   const [search] = useLazyQuery(SEARCH);
@@ -333,6 +357,8 @@ export default function TillPage() {
         return;
       }
       setReceipt(sale);
+      const text = buildMartReceipt(sale, displayName, receiptBranch(headerQuery.data) || { branchAlias: getPropertyCode() });
+      void printMartReceipt(text);
       setCart([]);
       setHeldId(null);
       setCash("");
@@ -436,30 +462,22 @@ export default function TillPage() {
           ) : (
             <button
               type="button"
-              onClick={async () => {
-                const counted = window.prompt("Counted cash in the drawer", "0");
-                if (counted == null) return;
-                setError("");
-                try {
-                  await closeDrawer({ variables: { closingCash: counted } });
-                  setNotice("Shift ended");
-                  drawerQuery.refetch();
-                  heldQuery.refetch();
-                } catch (err) {
-                  setError(errorText(err));
-                }
+              onClick={() => {
+                setCountedCash("0");
+                setShiftError("");
+                setShiftOpen(true);
               }}
               disabled={closing}
             >
-              {closing ? "Ending shift…" : "End shift"}
+              End shift
             </button>
           )}
           <button
             type="button"
             onClick={() => {
               sessionStorage.setItem(LOCK_KEY, "1");
-              setPin("");
               setPinError("");
+              setPinReset((value) => value + 1);
               setLocked(true);
             }}
           >
@@ -513,16 +531,14 @@ export default function TillPage() {
           <p className="ok">{notice}</p>
           {receipt ? (
             <div className="receipt" id="receipt">
-              <strong>{receipt.receiptNumber}</strong>
-              {(receipt.lines || []).map((line) => (
-                <div className="line" key={`${line.name}-${line.quantity}`}>
-                  <span>{line.quantity} × {line.name}</span>
-                  <span>{money(Number(line.lineTotal))}</span>
-                </div>
-              ))}
-              <p>Total {money(Number(receipt.total))}</p>
-              <p>Change {money(Number(receipt.changeAmount || 0))}</p>
-              <button className="ghost no-print" type="button" onClick={() => window.print()}>Print receipt</button>
+              <pre className="receipt-slip">{buildMartReceipt(receipt, displayName, receiptBranch(headerQuery.data) || { branchAlias: getPropertyCode() })}</pre>
+              <button
+                className="ghost no-print"
+                type="button"
+                onClick={() => void printMartReceipt(buildMartReceipt(receipt, displayName, receiptBranch(headerQuery.data) || { branchAlias: getPropertyCode() }))}
+              >
+                Print receipt
+              </button>
               <button className="danger no-print" type="button" onClick={voidLast} disabled={voiding}>Void with manager PIN</button>
             </div>
           ) : null}
@@ -590,46 +606,85 @@ export default function TillPage() {
           </div>
         </section>
       </main>
-      {locked ? (
-        <div className="lock">
+      {shiftOpen ? (
+        <div className="modal-back" role="presentation">
           <form
-            className="lock-card"
+            className="modal"
             onSubmit={async (event) => {
               event.preventDefault();
-              setPinError("");
+              setShiftError("");
               try {
-                const result = await unlockTill({ variables: { userPin: pin } });
-                const payload = result.data?.unlockMartTill;
-                if (payload?.success) {
-                  sessionStorage.removeItem(LOCK_KEY);
-                  setLocked(false);
-                  setPin("");
-                  return;
-                }
-                setPinError(payload?.message || "Invalid PIN. Please try again.");
+                await closeDrawer({ variables: { closingCash: countedCash || "0" } });
+                setShiftOpen(false);
+                setNotice("Shift ended");
+                drawerQuery.refetch();
+                heldQuery.refetch();
               } catch (err) {
-                setPinError(errorText(err));
+                setShiftError(errorText(err));
               }
             }}
           >
-            <StayViewMartMark />
-            <p>{displayName}</p>
+            <h2>Counted cash in the drawer</h2>
+            <p>Enter the cash you counted before the shift closes.</p>
             <label>
-              PIN
+              Counted cash
               <input
-                value={pin}
-                onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 4))}
-                inputMode="numeric"
-                autoComplete="off"
-                maxLength={4}
+                value={countedCash}
+                onChange={(event) => setCountedCash(event.target.value)}
+                inputMode="decimal"
                 autoFocus
               />
             </label>
-            <button className="primary full" type="submit" disabled={pin.length !== 4 || unlocking}>
-              {unlocking ? "Checking…" : "Unlock"}
-            </button>
-            <p className="error">{pinError}</p>
+            <p className="error">{shiftError}</p>
+            <div className="actions">
+              <button className="ghost" type="button" onClick={() => setShiftOpen(false)} disabled={closing}>
+                Cancel
+              </button>
+              <button className="primary" type="submit" disabled={closing}>
+                {closing ? "Ending shift…" : "End shift"}
+              </button>
+            </div>
           </form>
+        </div>
+      ) : null}
+      {locked ? (
+        <div className="lock">
+          <div className="lock-card">
+            <div className="lock-badge" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="5" y="11" width="14" height="10" rx="2" />
+                <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+              </svg>
+            </div>
+            <h2>Screen locked</h2>
+            <p>Enter your 4-digit PIN to unlock and continue.</p>
+            <p className="lock-name">{displayName}</p>
+            {pinError ? <p className="error">{pinError}</p> : null}
+            <PinDigits
+              disabled={unlocking}
+              hasError={Boolean(pinError)}
+              resetKey={pinReset}
+              onEdit={() => setPinError("")}
+              onComplete={async (value) => {
+                try {
+                  const result = await unlockTill({ variables: { userPin: value } });
+                  const payload = result.data?.unlockMartTill;
+                  if (payload?.success) {
+                    sessionStorage.removeItem(LOCK_KEY);
+                    setLocked(false);
+                    setPinError("");
+                    return;
+                  }
+                  setPinError(payload?.message || "Invalid PIN. Please try again.");
+                  setPinReset((current) => current + 1);
+                } catch (err) {
+                  setPinError(errorText(err));
+                  setPinReset((current) => current + 1);
+                }
+              }}
+            />
+            {unlocking ? <p>Validating PIN...</p> : null}
+          </div>
         </div>
       ) : null}
     </div>

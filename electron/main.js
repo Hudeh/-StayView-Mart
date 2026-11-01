@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("path");
 const fs = require("fs");
+const net = require("net");
 
 function loadEnvFile(filePath) {
   try {
@@ -126,7 +127,11 @@ function createMainWindow(propertyCode) {
     minWidth: 1024,
     minHeight: 640,
     title: APP_NAME,
-    webPreferences: { contextIsolation: true, nodeIntegration: false },
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      preload: path.join(__dirname, "preload.js"),
+    },
   });
   mainWindow.loadURL(url);
   mainWindow.on("closed", () => {
@@ -140,6 +145,81 @@ ipcMain.on("property-code-submitted", (_event, propertyCode) => {
     propertyPromptWindow = null;
   }
   createMainWindow(propertyCode);
+});
+
+let silentPrintWindow = null;
+
+function ensureSilentPrintWindow() {
+  if (silentPrintWindow && !silentPrintWindow.isDestroyed()) return Promise.resolve();
+  silentPrintWindow = new BrowserWindow({
+    show: false,
+    webPreferences: { contextIsolation: true, nodeIntegration: false },
+  });
+  const blank = "<!DOCTYPE html><html><body><pre id='c' style='font-family:monospace;font-size:12px;width:80mm'></pre></body></html>";
+  return silentPrintWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(blank)}`);
+}
+
+ipcMain.handle("print-receipt", async (_event, plainText, deviceName) => {
+  await ensureSilentPrintWindow();
+  const win = silentPrintWindow;
+  if (!win || win.isDestroyed()) throw new Error("Print window unavailable");
+  await win.webContents.executeJavaScript(
+    `document.getElementById('c').textContent = decodeURIComponent(${JSON.stringify(encodeURIComponent(plainText || ""))}); true;`,
+  );
+  await new Promise((resolve, reject) => {
+    const options = { silent: true, printBackground: false, copies: 1, margins: { marginType: "none" } };
+    if (deviceName && String(deviceName).trim()) options.deviceName = String(deviceName).trim();
+    win.webContents.print(options, (success, failureReason) => {
+      if (success) resolve();
+      else reject(new Error(failureReason || "Print failed"));
+    });
+  });
+  return { ok: true };
+});
+
+ipcMain.handle("list-printers", async (event) => {
+  try {
+    const wc = event.sender;
+    if (wc && typeof wc.getPrintersAsync === "function") {
+      const printers = await wc.getPrintersAsync();
+      return (printers || []).map((printer) => ({
+        name: printer.name,
+        displayName: printer.displayName || printer.name,
+        isDefault: Boolean(printer.isDefault),
+      }));
+    }
+    return [];
+  } catch (error) {
+    console.error("list-printers failed", error);
+    return [];
+  }
+});
+
+ipcMain.handle("print-raw-network", async (_event, payload) => {
+  const host = payload && payload.host ? String(payload.host).trim() : "";
+  const port = Number(payload && payload.port) || 9100;
+  const plainText = payload && payload.plainText != null ? String(payload.plainText) : "";
+  if (!host) throw new Error("Network printer host is required");
+  const data = Buffer.from(`${plainText}\n\n\n\x1D\x56\x00`, "utf8");
+  await new Promise((resolve, reject) => {
+    const socket = net.connect({ host, port }, () => {
+      socket.write(data, (err) => {
+        if (err) {
+          socket.destroy();
+          reject(err);
+          return;
+        }
+        socket.end();
+        resolve();
+      });
+    });
+    socket.setTimeout(3000, () => {
+      socket.destroy();
+      reject(new Error(`Timed out connecting to ${host}:${port}`));
+    });
+    socket.on("error", reject);
+  });
+  return { ok: true };
 });
 
 app.whenReady().then(() => {
