@@ -45,6 +45,14 @@ const HEADER = gql`
   }
 `;
 
+const LOYALTY = gql`
+  query martLoyaltyCard($phone: String) {
+    martLoyaltyCard(phone: $phone) {
+      phone name points value nairaPerPoint pointsPer100 active
+    }
+  }
+`;
+
 const HELD = gql`
   query listHeldMartTickets {
     listHeldMartTickets {
@@ -74,6 +82,8 @@ const COMPLETE = gql`
     $taxRate: String
     $notes: String
     $heldSaleId: ID
+    $loyaltyPhone: String
+    $redeemPoints: String
   ) {
     completeMartSale(
       lines: $lines
@@ -82,6 +92,8 @@ const COMPLETE = gql`
       taxRate: $taxRate
       notes: $notes
       heldSaleId: $heldSaleId
+      loyaltyPhone: $loyaltyPhone
+      redeemPoints: $redeemPoints
     ) {
       sale {
         id receiptNumber subtotal discountAmount taxAmount total changeAmount
@@ -193,6 +205,8 @@ export default function TillPage() {
   const [cash, setCash] = useState("");
   const [card, setCard] = useState("");
   const [transfer, setTransfer] = useState("");
+  const [loyaltyPhone, setLoyaltyPhone] = useState("");
+  const [redeemPoints, setRedeemPoints] = useState("");
   const [floatAmount, setFloatAmount] = useState("0");
   const [heldId, setHeldId] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<Sale | null>(null);
@@ -209,6 +223,7 @@ export default function TillPage() {
   });
   const heldQuery = useQuery(HELD, { skip: !getToken(), pollInterval: 60000 });
   const [lookup] = useLazyQuery(LOOKUP);
+  const [lookupLoyalty, { data: loyaltyData }] = useLazyQuery(LOYALTY);
   const [search] = useLazyQuery(SEARCH);
   const [openDrawer, { loading: opening }] = useMutation(OPEN_DRAWER);
   const [closeDrawer, { loading: closing }] = useMutation(CLOSE_DRAWER);
@@ -237,8 +252,14 @@ export default function TillPage() {
   const taxFlat = Number(taxInfo?.flatAmount) || 0;
   const subtotal = cart.reduce((sum, line) => sum + Number(line.unitPrice) * line.quantity, 0);
   const discountValue = Math.min(subtotal, Math.max(0, Number(discount) || 0));
-  const tax = ((subtotal - discountValue) * taxRate) / 100 + taxFlat;
-  const due = subtotal - discountValue + tax;
+  const loyalty = loyaltyData?.martLoyaltyCard;
+  const redeemMoney = Math.min(
+    Math.max(0, subtotal - discountValue),
+    Math.max(0, Number(redeemPoints) || 0) * (Number(loyalty?.nairaPerPoint) || 0),
+  );
+  const taxable = Math.max(0, subtotal - discountValue - redeemMoney);
+  const tax = (taxable * taxRate) / 100 + taxFlat;
+  const due = taxable + tax;
   const tendered = (Number(cash) || 0) + (Number(card) || 0) + (Number(transfer) || 0);
   const change = Math.max(0, tendered - due);
   const itemCount = cart.reduce((sum, line) => sum + (Number(line.quantity) || 0), 0);
@@ -349,6 +370,8 @@ export default function TillPage() {
           discount: String(discountValue),
           taxRate: String(taxRate || 0),
           heldSaleId: heldId,
+          loyaltyPhone: loyalty?.phone ? loyaltyPhone : "",
+          redeemPoints: loyalty?.phone ? redeemPoints || "0" : "0",
         },
       });
       const sale = (result.data?.completeMartSale?.sale ?? result.data?.data?.completeMartSale?.sale) as Sale;
@@ -365,6 +388,8 @@ export default function TillPage() {
       setCard("");
       setTransfer("");
       setDiscount("0");
+      setLoyaltyPhone("");
+      setRedeemPoints("");
       setNotice(`Paid ${sale.receiptNumber}`);
       heldQuery.refetch();
     } catch (err) {
@@ -575,6 +600,27 @@ export default function TillPage() {
             <span>Subtotal</span><span>{money(subtotal)}</span>
             <label>Discount</label>
             <input value={discount} onChange={(event) => setDiscount(event.target.value)} />
+            <label>Loyalty phone</label>
+            <input
+              value={loyaltyPhone}
+              placeholder="Optional"
+              onChange={(event) => setLoyaltyPhone(event.target.value)}
+              onBlur={() => {
+                if (loyaltyPhone.replace(/\D/g, "").length >= 7) {
+                  lookupLoyalty({ variables: { phone: loyaltyPhone } });
+                }
+              }}
+            />
+            <span>Points</span>
+            <span>{loyalty?.points || "0"}{loyalty?.value ? ` · ${money(Number(loyalty.value))}` : ""}</span>
+            <label>Redeem points</label>
+            <input value={redeemPoints} onChange={(event) => setRedeemPoints(event.target.value)} />
+            {redeemMoney > 0 ? (
+              <>
+                <span>Points discount</span>
+                <span>{money(redeemMoney)}</span>
+              </>
+            ) : null}
             <span>Tax{taxInfo?.label ? ` (${taxInfo.label})` : ""}</span>
             <span>{money(tax)}</span>
             <span>Due</span><span className="due">{money(due)}</span>
