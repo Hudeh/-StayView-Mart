@@ -94,10 +94,23 @@ export function receiptBranch(data: unknown): ReceiptBranch | null {
   return merged;
 }
 
+export function receiptSettings(data: unknown): { footer: string; maxPrints: number } {
+  const root = (data && typeof data === "object" && "data" in data
+    ? (data as { data?: unknown }).data
+    : data) as { martReceiptSettings?: { footer?: string | null; maxPrints?: number | null } } | null;
+  const row = root?.martReceiptSettings;
+  const max = Number(row?.maxPrints);
+  return {
+    footer: row?.footer ?? "Thank you for your order!\nPlease come again.",
+    maxPrints: Number.isFinite(max) && max >= 1 ? Math.min(20, Math.floor(max)) : 1,
+  };
+}
+
 export function buildMartReceipt(
   sale: ReceiptSale,
   cashier: string,
   branch: ReceiptBranch | null,
+  footer?: string | null,
 ) {
   const lines = (sale.lines || [])
     .map((line) => {
@@ -139,35 +152,37 @@ TOTAL:           ${money(total).padStart(15)}
 ${RULE}
 
 Payment Method: ${paymentText}
-${tendered > 0 ? `Tendered:        ${money(tendered).padStart(15)}\n` : ""}${change > 0 ? `Change:          ${money(change).padStart(15)}\n` : ""}
+${tendered > 0 ? `Tendered:        ${money(tendered).padStart(15)}\n` : ""}${change > 0 ? `Change:          ${money(change).padStart(15)}\n` : ""}${footerText(footer)}`;
+}
 
-Thank you for your order!
-Please come again.
-`;
+function footerText(footer?: string | null) {
+  const text = (footer ?? "Thank you for your order!\nPlease come again.").trim();
+  if (!text) return "\n";
+  return `\n${text}\n`;
 }
 
 function escapeHtml(text: string) {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-export async function printMartReceipt(plainText: string) {
+export async function printMartReceipt(plainText: string): Promise<boolean> {
   const endpoint = loadPrinter();
   const api = typeof window !== "undefined" ? window.electronAPI : undefined;
   try {
     if (endpoint.connection === "network" && endpoint.host && api?.printRawNetwork) {
       await api.printRawNetwork(endpoint.host, endpoint.port || 9100, plainText);
-      return;
+      return true;
     }
     if (endpoint.connection !== "browser" && api?.printReceiptSilent) {
       await api.printReceiptSilent(plainText, endpoint.deviceName || null);
-      return;
+      return true;
     }
   } catch (error) {
     console.error("Receipt print failed", error);
   }
 
   const printWindow = window.open("", "", "width=400,height=600");
-  if (!printWindow) return;
+  if (!printWindow) return false;
   printWindow.document.write(`<!DOCTYPE html><html><head><title>POS Receipt</title><style>
     body { font-family: 'Courier New', monospace; margin: 0; padding: 10px; width: 80mm; max-width: 100%; background: white; color: black; }
     pre { margin: 0; font-size: 12px; line-height: 1.4; white-space: pre-wrap; word-wrap: break-word; }
@@ -175,6 +190,7 @@ export async function printMartReceipt(plainText: string) {
   </style></head><body><pre>${escapeHtml(plainText)}</pre>
   <script>window.print(); window.onafterprint = function() { window.close(); };</script></body></html>`);
   printWindow.document.close();
+  return true;
 }
 
 export type MartPrinterConfig = {

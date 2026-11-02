@@ -6,7 +6,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { PinDigits } from "@/components/PinDigits";
 import { StayViewMartMark } from "@/components/StayViewMark";
 import { propertyPath, getPropertyCode } from "@/lib/property";
-import { buildMartReceipt, printMartReceipt, receiptBranch } from "@/lib/receipt";
+import { buildMartReceipt, printMartReceipt, receiptBranch, receiptSettings } from "@/lib/receipt";
 import { cashierName, clearSession, getToken } from "@/lib/session";
 
 const LOCK_KEY = "mart-screen-locked";
@@ -42,6 +42,7 @@ const HEADER = gql`
       status
       data { branchAlias business { businessName } }
     }
+    martReceiptSettings { footer maxPrints }
   }
 `;
 
@@ -216,6 +217,10 @@ export default function TillPage() {
   const [floatAmount, setFloatAmount] = useState("0");
   const [heldId, setHeldId] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<Sale | null>(null);
+  const [printsUsed, setPrintsUsed] = useState(0);
+  const [voidOpen, setVoidOpen] = useState(false);
+  const [voidError, setVoidError] = useState("");
+  const [voidPinReset, setVoidPinReset] = useState(0);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [working, setWorking] = useState<"pay" | "hold" | null>(null);
@@ -246,6 +251,23 @@ export default function TillPage() {
   const drawer = drawerQuery.data?.currentMartDrawer;
   const cashier = cashierQuery.data?.currentMartCashier;
   const displayName = cashier?.fullName || cashierName();
+  const slipSettings = receiptSettings(headerQuery.data);
+  const printLimitReached = printsUsed >= slipSettings.maxPrints;
+
+  function slipFor(sale: Sale, footer = slipSettings.footer) {
+    return buildMartReceipt(
+      sale,
+      displayName,
+      receiptBranch(headerQuery.data) || { branchAlias: getPropertyCode() },
+      footer,
+    );
+  }
+
+  function closeReceipt() {
+    setReceipt(null);
+    setPrintsUsed(0);
+    setVoidOpen(false);
+  }
   const photoUrl = cashier?.photoUrl || "";
   const initials = displayName
     .split(" ")
@@ -386,8 +408,11 @@ export default function TillPage() {
         return;
       }
       setReceipt(sale);
-      const text = buildMartReceipt(sale, displayName, receiptBranch(headerQuery.data) || { branchAlias: getPropertyCode() });
-      void printMartReceipt(text);
+      setPrintsUsed(0);
+      const fresh = await headerQuery.refetch();
+      const latest = receiptSettings(fresh.data);
+      const printed = await printMartReceipt(slipFor(sale, latest.footer));
+      if (printed) setPrintsUsed(1);
       setCart([]);
       setHeldId(null);
       setCash("");
@@ -449,17 +474,25 @@ export default function TillPage() {
     setNotice(`Recalled ${sale.receiptNumber}`);
   }
 
-  async function voidLast() {
-    if (!receipt?.id) return;
-    const pin = window.prompt("Manager PIN");
-    if (!pin) return;
-    const reason = window.prompt("Reason") || "Voided at the till";
+  function openVoid() {
+    if (!receipt?.id || voiding) return;
+    setVoidError("");
+    setVoidPinReset((current) => current + 1);
+    setVoidOpen(true);
+  }
+
+  async function submitVoid(pin: string) {
+    if (!receipt?.id || voiding) return;
+    setVoidError("");
     try {
-      await voidTicket({ variables: { saleId: receipt.id, managerPin: pin, reason } });
+      await voidTicket({
+        variables: { saleId: receipt.id, managerPin: pin, reason: "Voided at the till" },
+      });
       setNotice(`${receipt.receiptNumber} voided`);
-      setReceipt(null);
+      closeReceipt();
     } catch (err) {
-      setError(errorText(err));
+      setVoidError(errorText(err));
+      setVoidPinReset((current) => current + 1);
     }
   }
 
@@ -562,15 +595,31 @@ export default function TillPage() {
           <p className="ok">{notice}</p>
           {receipt ? (
             <div className="receipt" id="receipt">
-              <pre className="receipt-slip">{buildMartReceipt(receipt, displayName, receiptBranch(headerQuery.data) || { branchAlias: getPropertyCode() })}</pre>
-              <button
-                className="ghost no-print"
-                type="button"
-                onClick={() => void printMartReceipt(buildMartReceipt(receipt, displayName, receiptBranch(headerQuery.data) || { branchAlias: getPropertyCode() }))}
-              >
-                Print receipt
-              </button>
-              <button className="danger no-print" type="button" onClick={voidLast} disabled={voiding}>Void with manager PIN</button>
+              <div className="receipt-bar no-print">
+                <strong>Receipt</strong>
+                <button className="receipt-close" type="button" aria-label="Close receipt" onClick={closeReceipt}>
+                  ×
+                </button>
+              </div>
+              <pre className="receipt-slip">{slipFor(receipt)}</pre>
+              <div className="receipt-actions no-print">
+                <button
+                  className="ghost"
+                  type="button"
+                  disabled={printLimitReached}
+                  onClick={() => {
+                    if (printLimitReached) return;
+                    void printMartReceipt(slipFor(receipt)).then((printed) => {
+                      if (printed) setPrintsUsed((used) => used + 1);
+                    });
+                  }}
+                >
+                  Print receipt
+                </button>
+                <button className="danger" type="button" onClick={openVoid} disabled={voiding}>
+                  Void with manager PIN
+                </button>
+              </div>
             </div>
           ) : null}
         </section>
@@ -675,6 +724,33 @@ export default function TillPage() {
           </div>
         </section>
       </main>
+      {voidOpen && receipt ? (
+        <div className="modal-back" role="presentation">
+          <div className="modal void-modal" role="dialog" aria-labelledby="void-title">
+            <h2 id="void-title">Void sale</h2>
+            <p>{receipt.receiptNumber}</p>
+            <p>Amount to void</p>
+            <p className="due">{money(Number(receipt.total))}</p>
+            <p>Enter the manager 4-digit PIN.</p>
+            {voidError ? <p className="error">{voidError}</p> : null}
+            <PinDigits
+              disabled={voiding}
+              hasError={Boolean(voidError)}
+              resetKey={voidPinReset}
+              onEdit={() => setVoidError("")}
+              onComplete={(value) => {
+                void submitVoid(value);
+              }}
+            />
+            {voiding ? <p>Voiding…</p> : null}
+            <div className="actions">
+              <button className="ghost" type="button" onClick={() => setVoidOpen(false)} disabled={voiding}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {shiftOpen ? (
         <div className="modal-back" role="presentation">
           <form

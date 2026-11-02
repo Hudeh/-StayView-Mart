@@ -67,6 +67,8 @@ input.pin-box.bad { border-color: var(--danger); }
 }
 .modal h2 { margin: 0 0 8px; color: var(--brand-dark); }
 .modal p { color: var(--muted); }
+.void-modal { text-align: center; }
+.void-modal .due { display: block; margin: 4px 0 12px; }
 .top button {
   background: transparent; border: 1px solid var(--brand-light); border-radius: 8px; padding: 6px 10px;
 }
@@ -199,6 +201,15 @@ input:focus, select:focus { outline: 2px solid var(--brand-light); border-color:
 .actions { display: flex; gap: 8px; margin-top: 12px; }
 .actions button { flex: 1; }
 .receipt { margin-top: 12px; padding: 12px; background: white; border-radius: 12px; border: 1px solid var(--border); }
+.receipt-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.receipt-bar strong { color: var(--brand-dark); }
+.receipt-close {
+  width: 32px; height: 32px; padding: 0; border: 0; border-radius: 8px;
+  background: var(--tint); color: var(--brand-dark); font-size: 22px; line-height: 1;
+}
+.receipt-actions { display: flex; gap: 8px; margin-top: 12px; }
+.receipt-actions button { flex: 1; }
+.receipt-actions button:disabled { opacity: 0.45; cursor: not-allowed; }
 .receipt-slip {
   margin: 0; font-family: "Courier New", monospace; font-size: 12px; line-height: 1.4;
   white-space: pre-wrap; width: 80mm; max-width: 100%; color: black;
