@@ -25,9 +25,9 @@ button { cursor: pointer; }
   display: flex; justify-content: space-between; align-items: center;
   padding: 12px 16px; background: var(--brand); color: white;
 }
-.top strong { font-size: 18px; }
+.top strong { font-size: 18px; margin-right: auto; }
 .top span, .top button { color: #fff; }
-.who { display: flex; align-items: center; gap: 8px; margin-right: auto; margin-left: 16px; }
+.who { display: flex; align-items: center; gap: 8px; margin-left: 12px; }
 .avatar {
   width: 36px; height: 36px; border-radius: 50%; object-fit: cover;
   background: #fff; color: var(--brand-dark); display: inline-flex; align-items: center; justify-content: center;
@@ -69,10 +69,23 @@ input.pin-box.bad { border-color: var(--danger); }
 .modal p { color: var(--muted); }
 .void-modal { text-align: center; }
 .void-modal .due { display: block; margin: 4px 0 12px; }
+.top .row { flex: 0 0 auto; flex-wrap: nowrap; align-items: center; }
+.top .row > * { flex: 0 0 auto; }
+.top input {
+  width: 128px; margin: 0; padding: 8px 10px; color: var(--ink); background: #fff;
+}
 .top button {
   background: transparent; border: 1px solid var(--brand-light); border-radius: 8px; padding: 6px 10px;
+  white-space: nowrap;
+}
+.top button.icon-btn {
+  width: 36px; height: 36px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
 }
 .top button:hover { background: var(--brand-dark); }
+.who span:last-child {
+  max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 
 .login-screen {
   min-height: 100vh;

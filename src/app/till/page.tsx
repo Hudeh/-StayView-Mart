@@ -196,6 +196,48 @@ function errorText(error: unknown) {
   return error instanceof Error ? error.message : "Request failed";
 }
 
+function HeaderIcon({ name }: { name: "drawer" | "end" | "lock" | "out" }) {
+  const common = {
+    width: 18,
+    height: 18,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2,
+    "aria-hidden": true,
+  } as const;
+  if (name === "drawer") {
+    return (
+      <svg {...common}>
+        <rect x="3" y="4" width="18" height="14" rx="2" />
+        <path d="M3 10h18M9 14h6" />
+      </svg>
+    );
+  }
+  if (name === "end") {
+    return (
+      <svg {...common}>
+        <circle cx="12" cy="12" r="8" />
+        <path d="M12 8v5l3 2" />
+      </svg>
+    );
+  }
+  if (name === "lock") {
+    return (
+      <svg {...common}>
+        <rect x="5" y="11" width="14" height="9" rx="2" />
+        <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+      </svg>
+    );
+  }
+  return (
+    <svg {...common}>
+      <path d="M10 7V5a2 2 0 0 1 2-2h7v18h-7a2 2 0 0 1-2-2v-2" />
+      <path d="M15 12H3m0 0 3-3m-3 3 3 3" />
+    </svg>
+  );
+}
+
 export default function TillPage() {
   const router = useRouter();
   const scanRef = useRef<HTMLInputElement>(null);
@@ -500,6 +542,68 @@ export default function TillPage() {
     <div className="shell">
       <header className="top">
         <strong>StayView Mart</strong>
+        <div className="row no-print">
+          {!drawer ? (
+            <>
+              <input value={floatAmount} onChange={(event) => setFloatAmount(event.target.value)} placeholder="Opening float" />
+              <button
+                className="icon-btn"
+                type="button"
+                aria-label="Open drawer"
+                title="Open drawer"
+                onClick={async () => {
+                  await openDrawer({ variables: { openingFloat: floatAmount || "0" } });
+                  drawerQuery.refetch();
+                }}
+                disabled={opening}
+              >
+                <HeaderIcon name="drawer" />
+              </button>
+            </>
+          ) : (
+            <button
+              className="icon-btn"
+              type="button"
+              aria-label="End shift"
+              title="End shift"
+              onClick={() => {
+                setCountedCash("0");
+                setShiftError("");
+                setShiftOpen(true);
+              }}
+              disabled={closing}
+            >
+              <HeaderIcon name="end" />
+            </button>
+          )}
+          <button
+            className="icon-btn"
+            type="button"
+            aria-label="Lock"
+            title="Lock"
+            onClick={() => {
+              sessionStorage.setItem(LOCK_KEY, "1");
+              setPinError("");
+              setPinReset((value) => value + 1);
+              setLocked(true);
+            }}
+          >
+            <HeaderIcon name="lock" />
+          </button>
+          <button
+            className="icon-btn"
+            type="button"
+            aria-label="Sign out"
+            title="Sign out"
+            onClick={() => {
+              sessionStorage.removeItem(LOCK_KEY);
+              clearSession();
+              router.replace(propertyPath("/login"));
+            }}
+          >
+            <HeaderIcon name="out" />
+          </button>
+        </div>
         <span className="who">
           {photoUrl ? (
             <img className="avatar" src={photoUrl} alt="" />
@@ -508,56 +612,6 @@ export default function TillPage() {
           )}
           <span>{displayName}</span>
         </span>
-        <div className="row no-print">
-          {!drawer ? (
-            <>
-              <input value={floatAmount} onChange={(event) => setFloatAmount(event.target.value)} placeholder="Opening float" />
-              <button
-                type="button"
-                onClick={async () => {
-                  await openDrawer({ variables: { openingFloat: floatAmount || "0" } });
-                  drawerQuery.refetch();
-                }}
-                disabled={opening}
-              >
-                Open drawer
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              onClick={() => {
-                setCountedCash("0");
-                setShiftError("");
-                setShiftOpen(true);
-              }}
-              disabled={closing}
-            >
-              End shift
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => {
-              sessionStorage.setItem(LOCK_KEY, "1");
-              setPinError("");
-              setPinReset((value) => value + 1);
-              setLocked(true);
-            }}
-          >
-            Lock
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              sessionStorage.removeItem(LOCK_KEY);
-              clearSession();
-              router.replace(propertyPath("/login"));
-            }}
-          >
-            Sign out
-          </button>
-        </div>
       </header>
 
       <main className="till">
