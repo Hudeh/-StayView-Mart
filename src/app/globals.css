@@ -72,19 +72,71 @@ input.pin-box.bad { border-color: var(--danger); }
 }
 .top button:hover { background: var(--brand-dark); }
 
-.login {
-  max-width: 420px; margin: 10vh auto; background: var(--surface); padding: 28px;
-  border-radius: 16px; box-shadow: 0 8px 30px rgba(94, 59, 183, 0.12);
+.login-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  background: linear-gradient(160deg, #f7f5fc 0%, #eef1f7 45%, #f4f6f9 100%);
 }
-.login h1 { margin: 0 0 8px; color: var(--brand-dark); }
-.brand {
-  display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 0 12px;
+.login-card {
+  width: 100%;
+  max-width: 440px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 12px;
+  box-shadow: 0 18px 50px rgba(15, 39, 68, 0.08);
+  padding: 32px;
+  text-align: center;
 }
+.login-card h2 { margin: 0 0 4px; font-size: 20px; font-weight: 600; color: var(--ink); text-align: left; }
+.login-caption { margin: 8px 0 0; color: rgba(0, 0, 0, 0.6); font-size: 14px; }
+.login-copy { margin: 0 0 4px; color: rgba(0, 0, 0, 0.6); font-size: 14px; text-align: left; }
+.login-form { display: flex; flex-direction: column; gap: 24px; margin-top: 24px; text-align: left; }
+.brand { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0; }
 .brand-logo { height: 44px; width: 118px; color: var(--ink); display: block; }
 .brand-sep { color: var(--muted); font-size: 22px; font-weight: 600; line-height: 1; }
 .brand-product { color: var(--brand-dark); font-size: 28px; font-weight: 700; letter-spacing: -0.5px; }
-.login p { color: var(--muted); }
-.login p.ok { color: var(--brand); }
+.login-screen label { display: block; margin: 0; font-size: 16px; color: rgba(0, 0, 0, 0.6); }
+.login-screen .field { position: relative; }
+.login-screen .field span {
+  position: absolute; left: 14px; top: 17px; background: transparent;
+  font-size: 16px; line-height: 1; color: rgba(0, 0, 0, 0.6); pointer-events: none;
+}
+.login-screen .field:focus-within span,
+.login-screen .field:has(input:not(:placeholder-shown)) span {
+  top: -8px; left: 12px; padding: 0 4px; background: #fff; font-size: 12px;
+}
+.login-screen .field:focus-within span { color: var(--brand); }
+.login-screen input {
+  width: 100%; margin: 0; padding: 16.5px 14px; border: 1px solid rgba(0, 0, 0, 0.23);
+  border-radius: 4px; background: #fff;
+}
+.login-screen .field:focus-within input { border: 2px solid var(--brand); padding: 15.5px 13px; outline: none; }
+.login-screen .password input { padding-right: 48px; }
+.login-screen .eye {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  width: 40px; height: 40px; padding: 0; border: 0; background: transparent; color: rgba(0, 0, 0, 0.54);
+}
+.login-screen .linkish {
+  align-self: flex-end; margin-top: -12px; padding: 0; border: 0; background: transparent;
+  color: var(--brand); font-size: 14px; font-weight: 400;
+}
+.login-screen .linkish.center { align-self: center; margin-top: 0; }
+.login-screen .submit {
+  width: 100%; margin: 0; padding: 8px 22px; border: 0; border-radius: 4px;
+  background: var(--brand); color: #fff; font-size: 15px; font-weight: 500;
+  letter-spacing: 0.46px; text-transform: uppercase;
+}
+.login-screen .submit:hover { background: var(--brand-dark); }
+.login-screen .submit:disabled { opacity: 0.7; }
+.login-screen .text-btn {
+  width: 100%; padding: 8px; border: 0; background: transparent; color: var(--brand); font-weight: 500;
+}
+.login-alert { margin: 0; padding: 8px 12px; border-radius: 4px; font-size: 14px; text-align: left; }
+.login-alert.error { color: #5f2120; background: #fdeded; min-height: 0; }
+.login-alert.ok { color: #1e4620; background: #edf7ed; }
 label { display: block; margin-top: 14px; font-size: 13px; color: var(--brand-dark); }
 input, select {
   width: 100%; margin-top: 6px; padding: 12px; border: 1px solid var(--border); border-radius: 10px;
@@ -114,7 +166,7 @@ input:focus, select:focus { outline: 2px solid var(--brand-light); border-color:
 }
 .cart {
   display: flex; flex-direction: column; gap: 8px; margin: 12px 0;
-  max-height: 240px; overflow-y: auto;
+  max-height: 260px; overflow-y: auto;
 }
 .qty { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .qty button {
@@ -151,6 +203,7 @@ input:focus, select:focus { outline: 2px solid var(--brand-light); border-color:
   margin: 0; font-family: "Courier New", monospace; font-size: 12px; line-height: 1.4;
   white-space: pre-wrap; width: 80mm; max-width: 100%; color: black;
 }
+.powered-by { margin-top: 12px; font-size: 12px; color: var(--muted); text-align: center; display: block; font-weight: 400; }
 @media print {
   .top, .scan, .pay, .actions, .no-print { display: none !important; }
   .till { display: block; }

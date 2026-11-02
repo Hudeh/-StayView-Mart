@@ -48,7 +48,7 @@ const HEADER = gql`
 const LOYALTY = gql`
   query martLoyaltyCard($phone: String) {
     martLoyaltyCard(phone: $phone) {
-      phone name points value nairaPerPoint pointsPer100 active
+      phone name points value nairaPerPoint pointsPer100 active found
     }
   }
 `;
@@ -171,6 +171,12 @@ type Sale = {
   payments?: { method: string; amount: string }[];
 };
 
+function pointText(value?: string | null) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return "0";
+  return Number.isInteger(amount) ? String(amount) : String(amount);
+}
+
 function money(value: number) {
   return value.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -252,7 +258,7 @@ export default function TillPage() {
   const taxFlat = Number(taxInfo?.flatAmount) || 0;
   const subtotal = cart.reduce((sum, line) => sum + Number(line.unitPrice) * line.quantity, 0);
   const discountValue = Math.min(subtotal, Math.max(0, Number(discount) || 0));
-  const loyalty = loyaltyData?.martLoyaltyCard;
+  const loyalty = loyaltyData?.martLoyaltyCard ?? loyaltyData?.data?.martLoyaltyCard;
   const redeemMoney = Math.min(
     Math.max(0, subtotal - discountValue),
     Math.max(0, Number(redeemPoints) || 0) * (Number(loyalty?.nairaPerPoint) || 0),
@@ -370,8 +376,8 @@ export default function TillPage() {
           discount: String(discountValue),
           taxRate: String(taxRate || 0),
           heldSaleId: heldId,
-          loyaltyPhone: loyalty?.phone ? loyaltyPhone : "",
-          redeemPoints: loyalty?.phone ? redeemPoints || "0" : "0",
+          loyaltyPhone: loyalty?.found ? loyalty.phone : "",
+          redeemPoints: loyalty?.found ? redeemPoints || "0" : "0",
         },
       });
       const sale = (result.data?.completeMartSale?.sale ?? result.data?.data?.completeMartSale?.sale) as Sale;
@@ -604,15 +610,32 @@ export default function TillPage() {
             <input
               value={loyaltyPhone}
               placeholder="Optional"
-              onChange={(event) => setLoyaltyPhone(event.target.value)}
+              onChange={(event) => {
+                const next = event.target.value;
+                setLoyaltyPhone(next);
+                const digits = next.replace(/\D/g, "");
+                if (digits.length >= 10) lookupLoyalty({ variables: { phone: next } });
+              }}
               onBlur={() => {
                 if (loyaltyPhone.replace(/\D/g, "").length >= 7) {
                   lookupLoyalty({ variables: { phone: loyaltyPhone } });
                 }
               }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && loyaltyPhone.replace(/\D/g, "").length >= 7) {
+                  event.preventDefault();
+                  lookupLoyalty({ variables: { phone: loyaltyPhone } });
+                }
+              }}
             />
             <span>Points</span>
-            <span>{loyalty?.points || "0"}{loyalty?.value ? ` · ${money(Number(loyalty.value))}` : ""}</span>
+            <span>
+              {loyalty?.found
+                ? `${pointText(loyalty.points)}${loyalty.name ? ` · ${loyalty.name}` : ""} · ${money(Number(loyalty.value))}`
+                : loyalty
+                  ? "No card for this phone"
+                  : "0"}
+            </span>
             <label>Redeem points</label>
             <input value={redeemPoints} onChange={(event) => setRedeemPoints(event.target.value)} />
             {redeemMoney > 0 ? (

@@ -62,10 +62,16 @@ function setLastPropertyCode(code) {
   }
 }
 
+function isLocalDomain(domain) {
+  const host = String(domain || "").split(":")[0].trim().toLowerCase();
+  return host === "localhost" || host === "127.0.0.1" || host.endsWith(".localhost");
+}
+
 function buildAppUrl(propertyCode) {
   const code = (propertyCode || "").trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
   if (!code) return `http://localhost:${PORT}`;
-  if (process.env.POS_USE_LOCALHOST === "1") {
+  // 1010.localhost with no port hits Windows on port 80 and returns HTTP 404.
+  if (process.env.POS_USE_LOCALHOST === "1" || isLocalDomain(APP_DOMAIN)) {
     return `http://localhost:${PORT}/?property=${encodeURIComponent(code)}`;
   }
   return `${APP_PROTOCOL}://${code}.${APP_DOMAIN}`;
