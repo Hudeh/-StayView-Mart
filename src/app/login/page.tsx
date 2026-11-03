@@ -2,10 +2,11 @@
 
 import { gql, useMutation } from "@apollo/client";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
+import { NightToggle } from "@/components/NightToggle";
 import { StayViewMartMark } from "@/components/StayViewMark";
 import { getPropertyCode, propertyPath } from "@/lib/property";
-import { setSession } from "@/lib/session";
+import { consumeSessionMessage, setSession } from "@/lib/session";
 
 
 const LOGIN = gql`
@@ -74,6 +75,11 @@ export default function LoginPage() {
   const [login, { loading }] = useMutation(LOGIN);
   const [forgotPassword, { loading: forgotLoading }] = useMutation(FORGOT);
   const [resetPassword, { loading: resetLoading }] = useMutation(RESET);
+
+  useEffect(() => {
+    const message = consumeSessionMessage();
+    if (message) setError(message);
+  }, []);
 
   function clearMessages() {
     setError("");
@@ -175,6 +181,7 @@ export default function LoginPage() {
 
   return (
     <div className="login-screen">
+      <NightToggle className="night-float" />
       <div className="login-card">
         <StayViewMartMark />
         {mode === "login" ? (

@@ -3,6 +3,7 @@
 import { gql, useLazyQuery, useMutation, useQuery } from "@apollo/client";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { NightToggle } from "@/components/NightToggle";
 import { PinDigits } from "@/components/PinDigits";
 import { StayViewMartMark } from "@/components/StayViewMark";
 import { propertyPath, getPropertyCode } from "@/lib/property";
@@ -603,6 +604,7 @@ export default function TillPage() {
           >
             <HeaderIcon name="out" />
           </button>
+          <NightToggle />
         </div>
         <span className="who">
           {photoUrl ? (

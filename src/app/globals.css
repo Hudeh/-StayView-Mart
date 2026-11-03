@@ -227,7 +227,67 @@ input:focus, select:focus { outline: 2px solid var(--brand-light); border-color:
   margin: 0; font-family: "Courier New", monospace; font-size: 12px; line-height: 1.4;
   white-space: pre-wrap; width: 80mm; max-width: 100%; color: black;
 }
+.night-float {
+  position: fixed; top: 16px; right: 16px; z-index: 5;
+  width: 40px; height: 40px; padding: 0; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--brand-dark);
+  display: inline-flex; align-items: center; justify-content: center;
+}
 .powered-by { margin-top: 12px; font-size: 12px; color: var(--muted); text-align: center; display: block; font-weight: 400; }
+
+html[data-theme="night"] {
+  --ink: #f4f1fb;
+  --muted: #b7b0c7;
+  --surface: #1c1826;
+  --background: #121018;
+  --tint: #2a2340;
+  --border: #3a334c;
+  --danger-tint: #3d1d26;
+  color-scheme: dark;
+}
+html[data-theme="night"] body { background: var(--background); color: var(--ink); }
+html[data-theme="night"] .panel,
+html[data-theme="night"] .hit,
+html[data-theme="night"] .line,
+html[data-theme="night"] .modal,
+html[data-theme="night"] .lock-card,
+html[data-theme="night"] .login-card,
+html[data-theme="night"] .night-float {
+  background: var(--surface);
+  color: var(--ink);
+}
+html[data-theme="night"] .login-screen {
+  background: #121018;
+}
+html[data-theme="night"] .login-card {
+  border-color: var(--border);
+  box-shadow: none;
+}
+html[data-theme="night"] .login-caption,
+html[data-theme="night"] .login-copy,
+html[data-theme="night"] .login-screen label,
+html[data-theme="night"] .login-screen .field span {
+  color: var(--muted);
+}
+html[data-theme="night"] .login-screen .field:focus-within span,
+html[data-theme="night"] .login-screen .field:has(input:not(:placeholder-shown)) span {
+  background: var(--surface);
+  color: var(--brand-light);
+}
+html[data-theme="night"] .login-screen input,
+html[data-theme="night"] input,
+html[data-theme="night"] select {
+  background: #241f30;
+  color: var(--ink);
+  border-color: var(--border);
+}
+html[data-theme="night"] .top input {
+  background: #fff;
+  color: #14121f;
+}
+html[data-theme="night"] .login-screen .eye { color: var(--muted); }
+html[data-theme="night"] .receipt { background: #fff; color: #14121f; }
+html[data-theme="night"] .ghost { background: var(--tint); color: var(--brand-light); }
 @media print {
   .top, .scan, .pay, .actions, .no-print { display: none !important; }
   .till { display: block; }
