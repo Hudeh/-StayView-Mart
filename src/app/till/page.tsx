@@ -329,6 +329,10 @@ export default function TillPage() {
     Math.max(0, Number(redeemPoints) || 0) * (Number(loyalty?.nairaPerPoint) || 0),
   );
   const taxable = Math.max(0, subtotal - discountValue - redeemMoney);
+  const salePoints =
+    loyalty?.active === false
+      ? 0
+      : (Math.max(0, subtotal - discountValue) / 100) * (Number(loyalty?.pointsPer100) || 0);
   const tax = (taxable * taxRate) / 100 + taxFlat;
   const due = taxable + tax;
   const tendered = (Number(cash) || 0) + (Number(card) || 0) + (Number(transfer) || 0);
@@ -441,7 +445,7 @@ export default function TillPage() {
           discount: String(discountValue),
           taxRate: String(taxRate || 0),
           heldSaleId: heldId,
-          loyaltyPhone: loyalty?.found ? loyalty.phone : "",
+          loyaltyPhone: loyaltyPhone.replace(/\D/g, "").length >= 7 ? loyalty?.phone || loyaltyPhone : "",
           redeemPoints: loyalty?.found ? redeemPoints || "0" : "0",
         },
       });
@@ -736,9 +740,11 @@ export default function TillPage() {
             <span>Points</span>
             <span>
               {loyalty?.found
-                ? `${pointText(loyalty.points)}${loyalty.name ? ` · ${loyalty.name}` : ""} · ${money(Number(loyalty.value))}`
-                : loyalty
-                  ? "No card for this phone"
+                ? `${pointText(loyalty.points)}${loyalty.name ? ` · ${loyalty.name}` : ""}${
+                    salePoints > 0 ? ` · +${pointText(String(salePoints))} this sale` : ""
+                  }`
+                : loyalty?.active === false
+                  ? "Loyalty is off"
                   : "0"}
             </span>
             <label>Redeem points</label>
