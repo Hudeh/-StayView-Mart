@@ -1,4 +1,4 @@
-import { ApolloClient, ApolloLink, InMemoryCache, Observable } from "@apollo/client";
+import { ApolloClient, ApolloLink, InMemoryCache, Observable, type FetchResult } from "@apollo/client";
 import { decryptJSON, encryptJSON, getActiveGraphqlUrl, requestHeaders } from "@/lib/api";
 import {
   cashierName,
@@ -118,7 +118,7 @@ const httpLink = new ApolloLink((operation) => {
           throw new Error(SESSION_ENDED_MESSAGE);
         }
       }
-      observer.next(result);
+      observer.next(result as FetchResult);
       observer.complete();
     })().catch((error) => observer.error(error));
   });
