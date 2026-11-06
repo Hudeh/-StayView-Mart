@@ -166,12 +166,21 @@ input, select {
   width: 100%; margin-top: 6px; padding: 12px; border: 1px solid var(--border); border-radius: 10px;
 }
 input:focus, select:focus { outline: 2px solid var(--brand-light); border-color: var(--brand); }
+input:disabled, select:disabled { opacity: 0.4; cursor: not-allowed; background: var(--background); }
 .primary, .ghost, .danger {
   border: 0; border-radius: 10px; padding: 12px 14px; font-weight: 700;
 }
 .primary { background: var(--brand); color: white; }
 .primary:hover { background: var(--brand-dark); }
 .ghost { background: var(--tint); color: var(--brand-dark); }
+.primary:disabled,
+.ghost:disabled,
+.danger:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.primary:disabled:hover { background: var(--brand); }
+.ghost:disabled:hover { background: var(--tint); }
 .danger { background: var(--danger-tint); color: var(--danger); }
 .full { width: 100%; margin-top: 18px; }
 .error { color: var(--danger); min-height: 20px; }

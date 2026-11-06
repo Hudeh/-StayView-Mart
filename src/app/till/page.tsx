@@ -463,7 +463,7 @@ export default function TillPage() {
   }
 
   async function pay() {
-    if (working) return;
+    if (working || itemCount < 1) return;
     setWorking("pay");
     setError("");
     setNotice("");
@@ -511,7 +511,7 @@ export default function TillPage() {
   }
 
   async function hold() {
-    if (working) return;
+    if (working || itemCount < 1) return;
     setWorking("hold");
     setError("");
     try {
@@ -822,12 +822,14 @@ export default function TillPage() {
             <span>Due</span><span className="due">{money(due)}</span>
           </div>
           <div className="row" style={{ marginTop: 12 }}>
-            <label>Cash<input value={cash} onChange={(event) => setCash(event.target.value)} /></label>
-            <label>Card<input value={card} onChange={(event) => setCard(event.target.value)} /></label>
+            <label>Cash<input value={cash} onChange={(event) => setCash(event.target.value)} disabled={itemCount < 1} /></label>
+            <label>Card<input value={card} onChange={(event) => setCard(event.target.value)} disabled={itemCount < 1} /></label>
             <button
               className="ghost"
               type="button"
+              disabled={itemCount < 1}
               onClick={() => {
+                if (itemCount < 1) return;
                 setBankPick(transferBank);
                 setBankAmount(transfer);
                 setBankOpen(true);
@@ -842,6 +844,7 @@ export default function TillPage() {
               <button
                 className="ghost"
                 type="button"
+                disabled={itemCount < 1}
                 onClick={() => {
                   setTransfer("");
                   setTransferBank("");
@@ -853,10 +856,10 @@ export default function TillPage() {
           ) : null}
           <p>Tendered {money(tendered)} · Change {money(change)}</p>
           <div className="actions">
-            <button className="primary" type="button" disabled={!cart.length || working !== null} onClick={pay}>
+            <button className="primary" type="button" disabled={itemCount < 1 || working !== null} onClick={pay}>
               {working === "pay" ? "Taking payment…" : "Take payment"}
             </button>
-            <button className="ghost" type="button" disabled={!cart.length || working !== null} onClick={hold}>
+            <button className="ghost" type="button" disabled={itemCount < 1 || working !== null} onClick={hold}>
               {working === "hold" ? "Holding…" : "Hold"}
             </button>
           </div>
