@@ -100,7 +100,7 @@ const COMPLETE = gql`
       sale {
         id receiptNumber subtotal discountAmount taxAmount total changeAmount
         lines { name quantity unitPrice lineTotal }
-        payments { method amount }
+        payments { method amount bankName }
       }
     }
   }
@@ -123,6 +123,30 @@ const CASHIER = gql`
 const TILL_TAX = gql`
   query martTillTax {
     martTillTax { ratePercent flatAmount label }
+  }
+`;
+
+const BANKS = gql`
+  query martBanks($activeOnly: Boolean) {
+    martBanks(activeOnly: $activeOnly) { id name accountNumber }
+  }
+`;
+
+const SHIFT_SALES = gql`
+  query martDrawerSales {
+    martDrawerSales {
+      id receiptNumber total status
+    }
+  }
+`;
+
+const RECALL = gql`
+  query recallMartSale($saleId: ID!) {
+    recallMartSale(saleId: $saleId) {
+      id receiptNumber status subtotal discountAmount taxAmount total changeAmount
+      lines { productId variantId name barcode quantity unitPrice lineTotal }
+      payments { method amount bankName }
+    }
   }
 `;
 
@@ -170,7 +194,7 @@ type Sale = {
     unitPrice: string;
     lineTotal?: string;
   }[];
-  payments?: { method: string; amount: string }[];
+  payments?: { method: string; amount: string; bankName?: string | null }[];
 };
 
 function pointText(value?: string | null) {
@@ -255,6 +279,10 @@ export default function TillPage() {
   const [cash, setCash] = useState("");
   const [card, setCard] = useState("");
   const [transfer, setTransfer] = useState("");
+  const [transferBank, setTransferBank] = useState("");
+  const [bankOpen, setBankOpen] = useState(false);
+  const [bankPick, setBankPick] = useState("");
+  const [bankAmount, setBankAmount] = useState("");
   const [loyaltyPhone, setLoyaltyPhone] = useState("");
   const [redeemPoints, setRedeemPoints] = useState("");
   const [floatAmount, setFloatAmount] = useState("0");
@@ -276,6 +304,9 @@ export default function TillPage() {
     skip: !getToken() || !getPropertyCode(),
   });
   const heldQuery = useQuery(HELD, { skip: !getToken(), pollInterval: 60000 });
+  const banksQuery = useQuery(BANKS, { variables: { activeOnly: true }, skip: !getToken() });
+  const shiftSalesQuery = useQuery(SHIFT_SALES, { skip: !getToken() });
+  const [recallSale] = useLazyQuery(RECALL);
   const [lookup] = useLazyQuery(LOOKUP);
   const [lookupLoyalty, { data: loyaltyData }] = useLazyQuery(LOYALTY);
   const [search] = useLazyQuery(SEARCH);
@@ -418,8 +449,8 @@ export default function TillPage() {
   function payments() {
     const rows = [
       { method: "cash", amount: cash || "0" },
-      { method: "card", amount: card || "0" },
-      { method: "transfer", amount: transfer || "0" },
+      { method: "card", amount: card || "0", bankName: "" },
+      { method: "transfer", amount: transfer || "0", bankName: transferBank },
     ].filter((row) => Number(row.amount) > 0);
     if (!rows.length && due > 0) return [{ method: "cash", amount: due.toFixed(2) }];
     return rows;
@@ -465,6 +496,8 @@ export default function TillPage() {
       setCash("");
       setCard("");
       setTransfer("");
+      setTransferBank("");
+      shiftSalesQuery.refetch();
       setDiscount("0");
       setLoyaltyPhone("");
       setRedeemPoints("");
@@ -502,23 +535,52 @@ export default function TillPage() {
     }
   }
 
-  async function recall(sale: {
-    id: string;
-    receiptNumber: string;
-    lines?: { productId: string; variantId?: string | null; name: string; barcode?: string | null; quantity: string; unitPrice: string }[];
-  }) {
-    setHeldId(sale.id);
-    setCart(
-      (sale.lines || []).map((line) => ({
-        productId: line.productId,
-        variantId: line.variantId,
-        name: line.name,
-        barcode: line.barcode,
-        unitPrice: line.unitPrice,
-        quantity: Number(line.quantity),
-      })),
-    );
-    setNotice(`Recalled ${sale.receiptNumber}`);
+  async function recall(saleId: string) {
+    setError("");
+    try {
+      const result = await recallSale({ variables: { saleId }, fetchPolicy: "network-only" });
+      const sale = (result.data?.recallMartSale ?? result.data?.data?.recallMartSale) as Sale | undefined;
+      if (!sale?.receiptNumber) {
+        setError("This sale cannot be recalled.");
+        return;
+      }
+      if (sale.status === "held") {
+        setHeldId(sale.id);
+        setCart(
+          (sale.lines || []).map((line) => ({
+            productId: line.productId,
+            variantId: line.variantId,
+            name: line.name,
+            barcode: line.barcode,
+            unitPrice: line.unitPrice,
+            quantity: Number(line.quantity),
+          })),
+        );
+        setNotice(`Recalled ${sale.receiptNumber}`);
+        return;
+      }
+      setReceipt(sale);
+      setPrintsUsed(0);
+      setNotice(`Recalled ${sale.receiptNumber}`);
+    } catch (err) {
+      setError(errorText(err));
+    }
+  }
+
+  function confirmTransfer() {
+    const amount = Number(bankAmount);
+    if (!bankPick) {
+      setError("Select a bank.");
+      return;
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setError("Enter the transfer amount.");
+      return;
+    }
+    setTransferBank(bankPick);
+    setTransfer(amount.toFixed(2));
+    setBankOpen(false);
+    setError("");
   }
 
   function openVoid() {
@@ -762,8 +824,33 @@ export default function TillPage() {
           <div className="row" style={{ marginTop: 12 }}>
             <label>Cash<input value={cash} onChange={(event) => setCash(event.target.value)} /></label>
             <label>Card<input value={card} onChange={(event) => setCard(event.target.value)} /></label>
-            <label>Transfer<input value={transfer} onChange={(event) => setTransfer(event.target.value)} /></label>
+            <button
+              className="ghost"
+              type="button"
+              onClick={() => {
+                setBankPick(transferBank);
+                setBankAmount(transfer);
+                setBankOpen(true);
+              }}
+            >
+              Transfer
+            </button>
           </div>
+          {transferBank && Number(transfer) > 0 ? (
+            <p>
+              {transferBank} · {money(Number(transfer))}
+              <button
+                className="ghost"
+                type="button"
+                onClick={() => {
+                  setTransfer("");
+                  setTransferBank("");
+                }}
+              >
+                Remove
+              </button>
+            </p>
+          ) : null}
           <p>Tendered {money(tendered)} · Change {money(change)}</p>
           <div className="actions">
             <button className="primary" type="button" disabled={!cart.length || working !== null} onClick={pay}>
@@ -778,14 +865,68 @@ export default function TillPage() {
           <h3>Held tickets</h3>
           <div className="holds">
             {(heldQuery.data?.listHeldMartTickets || []).slice(0, 12).map((sale: Sale) => (
-              <button className="hit" type="button" key={sale.id} onClick={() => recall(sale)}>
+              <button className="hit" type="button" key={sale.id} onClick={() => void recall(sale.id)}>
                 <span>{sale.receiptNumber}</span>
                 <span>{money(Number(sale.total))}</span>
               </button>
             ))}
           </div>
+          <h3>This shift</h3>
+          <div className="holds">
+            {(shiftSalesQuery.data?.martDrawerSales || shiftSalesQuery.data?.data?.martDrawerSales || []).map(
+              (sale: Sale) => (
+                <button className="hit" type="button" key={sale.id} onClick={() => void recall(sale.id)}>
+                  <span>{sale.receiptNumber}</span>
+                  <span>{money(Number(sale.total))}</span>
+                </button>
+              ),
+            )}
+          </div>
         </section>
       </main>
+      {bankOpen ? (
+        <div className="modal-back" role="presentation">
+          <div className="modal bank-modal" role="dialog" aria-labelledby="bank-title">
+            <h2 id="bank-title">Transfer</h2>
+            <p>Select the bank and enter the amount.</p>
+            <div className="bank-grid">
+              {(banksQuery.data?.martBanks || banksQuery.data?.data?.martBanks || []).map(
+                (bank: { id: string; name: string; accountNumber?: string | null }) => (
+                  <button
+                    className={bankPick === bank.name ? "bank-card on" : "bank-card"}
+                    type="button"
+                    key={bank.id}
+                    onClick={() => setBankPick(bank.name)}
+                  >
+                    <strong>{bank.name}</strong>
+                    {bank.accountNumber ? <small>{bank.accountNumber}</small> : null}
+                  </button>
+                ),
+              )}
+            </div>
+            {(banksQuery.data?.martBanks || banksQuery.data?.data?.martBanks || []).length === 0 ? (
+              <p>Add transfer banks in Mart setup.</p>
+            ) : null}
+            <label>
+              Amount
+              <input
+                value={bankAmount}
+                onChange={(event) => setBankAmount(event.target.value)}
+                inputMode="decimal"
+                autoFocus
+              />
+            </label>
+            <div className="actions">
+              <button className="ghost" type="button" onClick={() => setBankOpen(false)}>
+                Cancel
+              </button>
+              <button className="primary" type="button" onClick={confirmTransfer}>
+                Use this bank
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {voidOpen && receipt ? (
         <div className="modal-back" role="presentation">
           <div className="modal void-modal" role="dialog" aria-labelledby="void-title">
@@ -826,6 +967,7 @@ export default function TillPage() {
                 setNotice("Shift ended");
                 drawerQuery.refetch();
                 heldQuery.refetch();
+                shiftSalesQuery.refetch();
               } catch (err) {
                 setShiftError(errorText(err));
               }

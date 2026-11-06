@@ -19,7 +19,7 @@ export type ReceiptSale = {
   total: string;
   changeAmount?: string | null;
   lines?: { name: string; quantity: string; lineTotal?: string | null }[] | null;
-  payments?: { method: string; amount: string }[] | null;
+  payments?: { method: string; amount: string; bankName?: string | null }[] | null;
 };
 
 const RULE = "───────────────────────────────────────";
@@ -66,9 +66,12 @@ function itemLine(name: string, price: string) {
   return name + " ".repeat(Math.max(1, gap)) + price;
 }
 
-function methodLabel(method: string) {
+function methodLabel(method: string, bankName?: string | null) {
   const clean = method.trim().toLowerCase();
-  if (clean === "transfer" || clean === "bank_transfer") return "TRANSFER";
+  if (clean === "transfer" || clean === "bank_transfer") {
+    const bank = (bankName || "").trim();
+    return bank ? `TRANSFER ${bank}` : "TRANSFER";
+  }
   if (clean === "card") return "CARD";
   if (clean === "cash") return "CASH";
   return clean.toUpperCase().replace(/_/g, " ");
@@ -127,7 +130,7 @@ export function buildMartReceipt(
   const payments = sale.payments || [];
   const tendered = payments.reduce((sum, pay) => sum + amount(pay.amount), 0);
   const paymentText = payments.length
-    ? payments.map((pay) => methodLabel(pay.method)).join(", ")
+    ? payments.map((pay) => methodLabel(pay.method, pay.bankName)).join(", ")
     : "CASH";
 
   return `${header(branch)}ORDER RECEIPT

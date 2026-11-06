@@ -68,6 +68,15 @@ input.pin-box.bad { border-color: var(--danger); }
 .modal h2 { margin: 0 0 8px; color: var(--brand-dark); }
 .modal p { color: var(--muted); }
 .void-modal { text-align: center; }
+.bank-modal { width: min(520px, 100%); }
+.bank-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
+.bank-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+  border: 1px solid var(--border); border-radius: 12px; padding: 12px;
+  background: var(--surface); color: var(--ink); text-align: left;
+}
+.bank-card.on { border-color: var(--brand); background: var(--tint); }
+.bank-card small { color: var(--muted); }
 .void-modal .due { display: block; margin: 4px 0 12px; }
 .top .row { flex: 0 0 auto; flex-wrap: nowrap; align-items: center; }
 .top .row > * { flex: 0 0 auto; }
