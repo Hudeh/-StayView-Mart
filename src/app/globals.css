@@ -166,7 +166,11 @@ input, select {
   width: 100%; margin-top: 6px; padding: 12px; border: 1px solid var(--border); border-radius: 10px;
 }
 input:focus, select:focus { outline: 2px solid var(--brand-light); border-color: var(--brand); }
-input:disabled, select:disabled { opacity: 0.4; cursor: not-allowed; background: var(--background); }
+input:disabled, select:disabled, .field-btn:disabled { opacity: 0.4; cursor: not-allowed; background: var(--background); }
+.field-btn {
+  width: 100%; margin-top: 6px; padding: 12px; border: 1px solid var(--border); border-radius: 10px;
+  background: #fff; color: var(--ink); font-weight: 400; text-align: left;
+}
 .primary, .ghost, .danger {
   border: 0; border-radius: 10px; padding: 12px 14px; font-weight: 700;
 }
@@ -294,7 +298,8 @@ html[data-theme="night"] .login-screen .field:has(input:not(:placeholder-shown))
 }
 html[data-theme="night"] .login-screen input,
 html[data-theme="night"] input,
-html[data-theme="night"] select {
+html[data-theme="night"] select,
+html[data-theme="night"] .field-btn {
   background: #241f30;
   color: var(--ink);
   border-color: var(--border);

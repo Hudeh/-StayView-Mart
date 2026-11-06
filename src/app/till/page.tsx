@@ -744,6 +744,26 @@ export default function TillPage() {
               </div>
             </div>
           ) : null}
+          <h3>Held tickets</h3>
+          <div className="holds">
+            {(heldQuery.data?.listHeldMartTickets || []).slice(0, 12).map((sale: Sale) => (
+              <button className="hit" type="button" key={sale.id} onClick={() => void recall(sale.id)}>
+                <span>{sale.receiptNumber}</span>
+                <span>{money(Number(sale.total))}</span>
+              </button>
+            ))}
+          </div>
+          <h3>This shift</h3>
+          <div className="holds">
+            {(shiftSalesQuery.data?.martDrawerSales || shiftSalesQuery.data?.data?.martDrawerSales || []).map(
+              (sale: Sale) => (
+                <button className="hit" type="button" key={sale.id} onClick={() => void recall(sale.id)}>
+                  <span>{sale.receiptNumber}</span>
+                  <span>{money(Number(sale.total))}</span>
+                </button>
+              ),
+            )}
+          </div>
         </section>
 
         <section className="panel pay">
@@ -824,19 +844,22 @@ export default function TillPage() {
           <div className="row" style={{ marginTop: 12 }}>
             <label>Cash<input value={cash} onChange={(event) => setCash(event.target.value)} disabled={itemCount < 1} /></label>
             <label>Card<input value={card} onChange={(event) => setCard(event.target.value)} disabled={itemCount < 1} /></label>
-            <button
-              className="ghost"
-              type="button"
-              disabled={itemCount < 1}
-              onClick={() => {
-                if (itemCount < 1) return;
-                setBankPick(transferBank);
-                setBankAmount(transfer);
-                setBankOpen(true);
-              }}
-            >
+            <label>
               Transfer
-            </button>
+              <button
+                className="field-btn"
+                type="button"
+                disabled={itemCount < 1}
+                onClick={() => {
+                  if (itemCount < 1) return;
+                  setBankPick(transferBank);
+                  setBankAmount(transfer);
+                  setBankOpen(true);
+                }}
+              >
+                {transferBank && Number(transfer) > 0 ? transferBank : "Select bank"}
+              </button>
+            </label>
           </div>
           {transferBank && Number(transfer) > 0 ? (
             <p>
@@ -865,26 +888,6 @@ export default function TillPage() {
           </div>
           <p className="error">{error}</p>
           <p className="ok">{notice}</p>
-          <h3>Held tickets</h3>
-          <div className="holds">
-            {(heldQuery.data?.listHeldMartTickets || []).slice(0, 12).map((sale: Sale) => (
-              <button className="hit" type="button" key={sale.id} onClick={() => void recall(sale.id)}>
-                <span>{sale.receiptNumber}</span>
-                <span>{money(Number(sale.total))}</span>
-              </button>
-            ))}
-          </div>
-          <h3>This shift</h3>
-          <div className="holds">
-            {(shiftSalesQuery.data?.martDrawerSales || shiftSalesQuery.data?.data?.martDrawerSales || []).map(
-              (sale: Sale) => (
-                <button className="hit" type="button" key={sale.id} onClick={() => void recall(sale.id)}>
-                  <span>{sale.receiptNumber}</span>
-                  <span>{money(Number(sale.total))}</span>
-                </button>
-              ),
-            )}
-          </div>
         </section>
       </main>
       {bankOpen ? (
