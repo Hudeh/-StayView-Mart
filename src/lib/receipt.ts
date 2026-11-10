@@ -26,7 +26,12 @@ const RULE = "──────────────────────
 const WIDTH = 39;
 
 function money(value: number) {
-  return new Intl.NumberFormat().format(Number.isFinite(value) ? value : 0);
+  const amount = Number.isFinite(value) ? value : 0;
+  const whole = Number.isInteger(amount);
+  return new Intl.NumberFormat("en-NG", {
+    minimumFractionDigits: whole ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
 }
 
 function amount(value?: string | null) {
