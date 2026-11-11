@@ -138,9 +138,9 @@ export function buildMartReceipt(
     ? payments.map((pay) => methodLabel(pay.method, pay.bankName)).join(", ")
     : "CASH";
 
-  return `${header(branch)}ORDER RECEIPT
+  return `${header(branch)}SALES RECEIPT
 
-Order #: ${sale.receiptNumber || "—"}
+Sales #: ${sale.receiptNumber || "—"}
 Type: COUNTER
 Time: ${new Date().toLocaleString()}
 Cashier: ${cashier || "—"}
