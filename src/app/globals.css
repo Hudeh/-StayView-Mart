@@ -49,10 +49,17 @@ button { cursor: pointer; }
   border: 0; background: transparent; color: var(--ink); border-radius: 8px; padding: 8px;
   text-align: left;
 }
-.top .who-drop button:hover { background: var(--tint); color: var(--ink); }
+.top .who-drop button span { color: var(--ink); }
+.top .who-drop button:hover { background: var(--tint); }
+.top .who-drop button:hover span { color: var(--ink); }
 .category-bar { display: flex; align-items: center; gap: 8px; margin-top: 16px; }
 .category-bar h3 { margin: 0; }
-.category-bar .ghost { padding: 8px 12px; }
+.back-arrow {
+  width: 36px; height: 36px; padding: 0; border: 0; border-radius: 8px;
+  background: var(--tint); color: var(--brand-dark);
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.back-arrow:hover { background: var(--brand); color: #fff; }
 .avatar {
   width: 36px; height: 36px; border-radius: 50%; object-fit: cover;
   background: #fff; color: var(--brand-dark); display: inline-flex; align-items: center; justify-content: center;
