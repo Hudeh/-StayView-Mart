@@ -34,6 +34,20 @@ const SEARCH = gql`
   }
 `;
 
+const CATEGORIES = gql`
+  query martCategories {
+    martCategories { id name }
+  }
+`;
+
+const CATEGORY_PRODUCTS = gql`
+  query martCategoryProducts($categoryId: ID!) {
+    martCategoryProducts(categoryId: $categoryId) {
+      productId variantId name barcode sku unitPrice unitOfMeasure quantityOnHand
+    }
+  }
+`;
+
 const HEADER = gql`
   query martReceiptHeader($branchAlias: String!) {
     branchAddresses(branchAlias: $branchAlias) {
@@ -295,6 +309,10 @@ export default function TillPage() {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [working, setWorking] = useState<"pay" | "hold" | null>(null);
+  const [cashierMenu, setCashierMenu] = useState(false);
+  const [categoryId, setCategoryId] = useState("");
+  const [categoryName, setCategoryName] = useState("");
+  const cashierMenuRef = useRef<HTMLDivElement>(null);
 
   const drawerQuery = useQuery(DRAWER, { skip: !getToken() });
   const cashierQuery = useQuery(CASHIER, { skip: !getToken() });
@@ -310,6 +328,8 @@ export default function TillPage() {
   const [lookup] = useLazyQuery(LOOKUP);
   const [lookupLoyalty, { data: loyaltyData }] = useLazyQuery(LOYALTY);
   const [search] = useLazyQuery(SEARCH);
+  const categoriesQuery = useQuery(CATEGORIES, { skip: !getToken() });
+  const [loadCategoryProducts, categoryProductsQuery] = useLazyQuery(CATEGORY_PRODUCTS);
   const [openDrawer, { loading: opening }] = useMutation(OPEN_DRAWER);
   const [closeDrawer, { loading: closing }] = useMutation(CLOSE_DRAWER);
   const [completeSale] = useMutation(COMPLETE);
@@ -321,6 +341,15 @@ export default function TillPage() {
     if (!getToken()) router.replace(propertyPath("/login"));
     else setLocked(sessionStorage.getItem(LOCK_KEY) === "1");
   }, [router]);
+
+  useEffect(() => {
+    if (!cashierMenu) return;
+    const close = (event: MouseEvent) => {
+      if (!cashierMenuRef.current?.contains(event.target as Node)) setCashierMenu(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [cashierMenu]);
 
   const drawer = drawerQuery.data?.currentMartDrawer;
   const cashier = cashierQuery.data?.currentMartCashier;
@@ -536,6 +565,7 @@ export default function TillPage() {
   }
 
   async function recall(saleId: string) {
+    setCashierMenu(false);
     setError("");
     try {
       const result = await recallSale({ variables: { saleId }, fetchPolicy: "network-only" });
@@ -672,14 +702,53 @@ export default function TillPage() {
           </button>
           <NightToggle />
         </div>
-        <span className="who">
-          {photoUrl ? (
-            <img className="avatar" src={photoUrl} alt="" />
-          ) : (
-            <span className="avatar" aria-hidden="true">{initials || "M"}</span>
-          )}
-          <span>{displayName}</span>
-        </span>
+        <div className="who-menu" ref={cashierMenuRef}>
+          <button
+            className="who"
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={cashierMenu}
+            onClick={() => setCashierMenu((open) => !open)}
+          >
+            {photoUrl ? (
+              <img className="avatar" src={photoUrl} alt="" />
+            ) : (
+              <span className="avatar" aria-hidden="true">{initials || "M"}</span>
+            )}
+            <span className="who-name">{displayName}</span>
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" />
+            </svg>
+          </button>
+          {cashierMenu ? (
+            <div className="who-drop" role="menu">
+              <p className="who-drop-label">Held tickets</p>
+              {(heldQuery.data?.listHeldMartTickets || []).length === 0 ? (
+                <p className="who-drop-empty">No held tickets</p>
+              ) : (
+                (heldQuery.data?.listHeldMartTickets || []).slice(0, 12).map((sale: Sale) => (
+                  <button type="button" key={sale.id} onClick={() => void recall(sale.id)}>
+                    <span>{sale.receiptNumber}</span>
+                    <span>{money(Number(sale.total))}</span>
+                  </button>
+                ))
+              )}
+              <p className="who-drop-label">This shift</p>
+              {(shiftSalesQuery.data?.martDrawerSales || shiftSalesQuery.data?.data?.martDrawerSales || []).length === 0 ? (
+                <p className="who-drop-empty">No sales this shift</p>
+              ) : (
+                (shiftSalesQuery.data?.martDrawerSales || shiftSalesQuery.data?.data?.martDrawerSales || []).map(
+                  (sale: Sale) => (
+                    <button type="button" key={sale.id} onClick={() => void recall(sale.id)}>
+                      <span>{sale.receiptNumber}</span>
+                      <span>{money(Number(sale.total))}</span>
+                    </button>
+                  ),
+                )
+              )}
+            </div>
+          ) : null}
+        </div>
       </header>
 
       <main className="till">
@@ -744,26 +813,60 @@ export default function TillPage() {
               </div>
             </div>
           ) : null}
-          <h3>Held tickets</h3>
-          <div className="holds">
-            {(heldQuery.data?.listHeldMartTickets || []).slice(0, 12).map((sale: Sale) => (
-              <button className="hit" type="button" key={sale.id} onClick={() => void recall(sale.id)}>
-                <span>{sale.receiptNumber}</span>
-                <span>{money(Number(sale.total))}</span>
-              </button>
-            ))}
-          </div>
-          <h3>This shift</h3>
-          <div className="holds">
-            {(shiftSalesQuery.data?.martDrawerSales || shiftSalesQuery.data?.data?.martDrawerSales || []).map(
-              (sale: Sale) => (
-                <button className="hit" type="button" key={sale.id} onClick={() => void recall(sale.id)}>
-                  <span>{sale.receiptNumber}</span>
-                  <span>{money(Number(sale.total))}</span>
+          {categoryId ? (
+            <>
+              <div className="category-bar">
+                <button className="ghost" type="button" onClick={() => { setCategoryId(""); setCategoryName(""); }}>
+                  Categories
                 </button>
-              ),
-            )}
-          </div>
+                <h3>{categoryName}</h3>
+              </div>
+              <div className="hits">
+                {categoryProductsQuery.loading ? <p>Loading products…</p> : null}
+                {(categoryProductsQuery.data?.martCategoryProducts || categoryProductsQuery.data?.data?.martCategoryProducts || []).map((item: Item) => (
+                  <button className="hit" type="button" key={`${item.productId}-${item.variantId || ""}`} onClick={() => addItem(item)}>
+                    <span>
+                      <strong>{item.name}</strong>
+                      <br />
+                      <small>
+                        {[item.barcode || item.unitOfMeasure, stockText(item.quantityOnHand)].filter(Boolean).join(" · ")}
+                      </small>
+                    </span>
+                    <span>{money(Number(item.unitPrice))}</span>
+                  </button>
+                ))}
+                {!categoryProductsQuery.loading &&
+                (categoryProductsQuery.data?.martCategoryProducts || categoryProductsQuery.data?.data?.martCategoryProducts || []).length === 0 ? (
+                  <p>No products in this category.</p>
+                ) : null}
+              </div>
+            </>
+          ) : (
+            <>
+              <h3>Categories</h3>
+              <div className="holds">
+                {(categoriesQuery.data?.martCategories || categoriesQuery.data?.data?.martCategories || []).map(
+                  (category: { id: string; name: string }) => (
+                    <button
+                      className="hit"
+                      type="button"
+                      key={category.id}
+                      onClick={() => {
+                        setCategoryId(category.id);
+                        setCategoryName(category.name);
+                        void loadCategoryProducts({ variables: { categoryId: category.id } });
+                      }}
+                    >
+                      <span>{category.name}</span>
+                    </button>
+                  ),
+                )}
+              </div>
+              {!(categoriesQuery.data?.martCategories || categoriesQuery.data?.data?.martCategories || []).length && !categoriesQuery.loading ? (
+                <p>No categories yet.</p>
+              ) : null}
+            </>
+          )}
         </section>
 
         <section className="panel pay">

@@ -27,7 +27,32 @@ button { cursor: pointer; }
 }
 .top strong { font-size: 18px; margin-right: auto; }
 .top span, .top button { color: #fff; }
-.who { display: flex; align-items: center; gap: 8px; margin-left: 12px; }
+.who-menu { position: relative; margin-left: 12px; }
+.top button.who {
+  display: flex; align-items: center; gap: 8px;
+  border: 0; background: transparent; border-radius: 999px; padding: 4px 8px; color: #fff;
+}
+.top button.who:hover { background: rgba(255,255,255,0.12); }
+.who-name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.who-drop {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 30;
+  width: 280px; max-height: 420px; overflow: auto;
+  background: var(--surface); color: var(--ink); border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(20, 18, 31, 0.28); padding: 8px;
+}
+.who-drop-label {
+  margin: 8px 8px 4px; font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase;
+}
+.who-drop-empty { margin: 0 8px 8px; color: var(--muted); font-size: 13px; }
+.top .who-drop button {
+  width: 100%; display: flex; justify-content: space-between; gap: 8px;
+  border: 0; background: transparent; color: var(--ink); border-radius: 8px; padding: 8px;
+  text-align: left;
+}
+.top .who-drop button:hover { background: var(--tint); color: var(--ink); }
+.category-bar { display: flex; align-items: center; gap: 8px; margin-top: 16px; }
+.category-bar h3 { margin: 0; }
+.category-bar .ghost { padding: 8px 12px; }
 .avatar {
   width: 36px; height: 36px; border-radius: 50%; object-fit: cover;
   background: #fff; color: var(--brand-dark); display: inline-flex; align-items: center; justify-content: center;
@@ -92,9 +117,6 @@ input.pin-box.bad { border-color: var(--danger); }
   display: inline-flex; align-items: center; justify-content: center;
 }
 .top button:hover { background: var(--brand-dark); }
-.who span:last-child {
-  max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
 
 .login-screen {
   min-height: 100vh;
