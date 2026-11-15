@@ -90,8 +90,10 @@ export default function LoginPage() {
     event.preventDefault();
     clearMessages();
     try {
+      const terminalMac =
+        (await window.electronAPI?.getTerminalMac?.()) || "";
       const result = await login({
-        variables: { authData: { username, password, clientApp: "mart" } },
+        variables: { authData: { username, password, clientApp: "mart", terminalMac } },
       });
       const payload = result.data?.loginHotelUser ?? result.data?.data?.loginHotelUser;
       if (!payload?.status || !payload.jwtToken) {

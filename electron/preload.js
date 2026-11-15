@@ -7,4 +7,5 @@ contextBridge.exposeInMainWorld("electronAPI", {
   listPrinters: () => ipcRenderer.invoke("list-printers"),
   printRawNetwork: (host, port, plainText) =>
     ipcRenderer.invoke("print-raw-network", { host, port, plainText }),
+  getTerminalMac: () => ipcRenderer.invoke("get-terminal-mac"),
 });

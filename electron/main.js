@@ -1,4 +1,5 @@
 const { app, BrowserWindow, ipcMain } = require("electron");
+const os = require("os");
 const path = require("path");
 const fs = require("fs");
 const net = require("net");
@@ -164,6 +165,23 @@ function ensureSilentPrintWindow() {
   const blank = "<!DOCTYPE html><html><body><pre id='c' style='font-family:monospace;font-size:12px;width:80mm'></pre></body></html>";
   return silentPrintWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(blank)}`);
 }
+
+function terminalMac() {
+  const found = [];
+  const nets = os.networkInterfaces();
+  for (const name of Object.keys(nets).sort()) {
+    for (const net of nets[name] || []) {
+      if (net.internal) continue;
+      const mac = String(net.mac || "").toLowerCase();
+      if (!mac || mac === "00:00:00:00:00:00") continue;
+      found.push({ name: name.toLowerCase(), mac });
+    }
+  }
+  const wired = found.find((row) => !/wi-?fi|wireless|wlan|bluetooth/.test(row.name));
+  return (wired || found[0] || {}).mac || "";
+}
+
+ipcMain.handle("get-terminal-mac", () => terminalMac());
 
 ipcMain.handle("print-receipt", async (_event, plainText, deviceName) => {
   await ensureSilentPrintWindow();
