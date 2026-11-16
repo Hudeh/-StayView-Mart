@@ -10,7 +10,8 @@
     "build": "next build",
     "start": "next start --port 3003",
     "electron": "electron .",
-    "electron:dev": "cross-env NODE_ENV=development POS_USE_LOCALHOST=1 electron ."
+    "electron:dev": "cross-env NODE_ENV=development POS_USE_LOCALHOST=1 electron .",
+    "electron:build": "node scripts/write-mart-shell-config.js && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder"
   },
   "dependencies": {
     "@apollo/client": "^3.13.4",
@@ -25,6 +26,25 @@
     "@types/react-dom": "^19",
     "cross-env": "^7.0.3",
     "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
     "typescript": "^5"
+  },
+  "build": {
+    "appId": "com.stayview.mart",
+    "productName": "StayView Mart",
+    "directories": { "output": "dist" },
+    "icon": "public/icon.png",
+    "files": ["electron/**", "public/icon.png", "public/icon.ico"],
+    "asar": true,
+    "win": {
+      "target": ["nsis"],
+      "icon": "public/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "StayView Mart"
+    }
   }
 }

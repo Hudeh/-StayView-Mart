@@ -31,6 +31,24 @@ function loadEnvFile(filePath) {
 loadEnvFile(path.join(__dirname, "..", ".env"));
 loadEnvFile(path.join(__dirname, "..", ".env.local"));
 
+function readBundledConfig() {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(__dirname, "bundled-config.json"), "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+const bundledConfig = readBundledConfig();
+
+function windowIcon() {
+  const png = path.join(__dirname, "..", "public", "icon.png");
+  const ico = path.join(__dirname, "..", "public", "icon.ico");
+  if (fs.existsSync(png)) return png;
+  if (fs.existsSync(ico)) return ico;
+  return undefined;
+}
+
 const APP_NAME = "StayView Mart";
 app.setName(APP_NAME);
 if (process.platform === "win32") app.setAppUserModelId(APP_NAME);
@@ -68,8 +86,21 @@ function isLocalDomain(domain) {
   return host === "localhost" || host === "127.0.0.1" || host.endsWith(".localhost");
 }
 
+function configuredOrigin() {
+  return (process.env.MART_APP_ORIGIN || bundledConfig.appOrigin || "").trim().replace(/\/$/, "");
+}
+
+function explicitAppUrl() {
+  return (process.env.MART_APP_URL || bundledConfig.appUrl || "").trim();
+}
+
 function buildAppUrl(propertyCode) {
   const code = (propertyCode || "").trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
+  const origin = configuredOrigin();
+  if (origin) {
+    if (!code) return origin;
+    return `${origin}/?property=${encodeURIComponent(code)}`;
+  }
   if (!code) return `http://localhost:${PORT}`;
   // 1010.localhost with no port hits Windows on port 80 and returns HTTP 404.
   if (process.env.POS_USE_LOCALHOST === "1" || isLocalDomain(APP_DOMAIN)) {
@@ -112,6 +143,7 @@ function createPropertyPrompt() {
     height: 340,
     resizable: false,
     title: "StayView Mart",
+    icon: windowIcon(),
     webPreferences: {
       preload: path.join(__dirname, "property-prompt-preload.js"),
       contextIsolation: true,
@@ -125,8 +157,8 @@ function createPropertyPrompt() {
   });
 }
 
-function createMainWindow(propertyCode) {
-  const url = buildAppUrl(propertyCode);
+function createMainWindow(propertyCode, explicitUrl) {
+  const url = explicitUrl || buildAppUrl(propertyCode);
   if (propertyCode) setLastPropertyCode(propertyCode);
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -134,6 +166,7 @@ function createMainWindow(propertyCode) {
     minWidth: 1024,
     minHeight: 640,
     title: APP_NAME,
+    icon: windowIcon(),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -247,6 +280,11 @@ ipcMain.handle("print-raw-network", async (_event, payload) => {
 });
 
 app.whenReady().then(() => {
+  const fixedUrl = explicitAppUrl();
+  if (fixedUrl) {
+    createMainWindow("", fixedUrl);
+    return;
+  }
   createPropertyPrompt();
 });
 
