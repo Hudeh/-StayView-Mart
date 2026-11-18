@@ -121,6 +121,12 @@ input.pin-box.bad { border-color: var(--danger); }
 .bank-card.on { border-color: var(--brand); background: var(--tint); }
 .bank-card small { color: var(--muted); }
 .void-modal .due { display: block; margin: 4px 0 12px; }
+.void-reason { text-align: left; margin: 8px 0 12px; }
+.void-reason textarea {
+  width: 100%; margin-top: 6px; min-height: 72px; resize: vertical;
+  border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+  color: var(--ink); background: #fff; font: inherit;
+}
 .top .row { flex: 0 0 auto; flex-wrap: nowrap; align-items: center; }
 .top .row > * { flex: 0 0 auto; }
 .top input {

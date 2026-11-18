@@ -253,7 +253,13 @@ function stockText(value?: string | null) {
 function errorText(error: unknown) {
   const graph = (error as { graphQLErrors?: { message?: string }[] })?.graphQLErrors?.[0]?.message;
   if (graph) return graph;
+  const payload = (error as { errors?: { message?: string }[] })?.errors?.[0]?.message;
+  if (payload) return payload;
   return error instanceof Error ? error.message : "Request failed";
+}
+
+function resultError(result: { errors?: readonly { message?: string }[] | null }) {
+  return result.errors?.find((error) => error?.message)?.message || "";
 }
 
 function HeaderIcon({ name }: { name: "drawer" | "end" | "lock" | "out" }) {
@@ -327,6 +333,8 @@ export default function TillPage() {
   const [printsUsed, setPrintsUsed] = useState(0);
   const [voidOpen, setVoidOpen] = useState(false);
   const [voidError, setVoidError] = useState("");
+  const [voidReason, setVoidReason] = useState("");
+  const [voidPin, setVoidPin] = useState("");
   const [voidPinReset, setVoidPinReset] = useState(0);
   const [reprintOpen, setReprintOpen] = useState(false);
   const [reprintError, setReprintError] = useState("");
@@ -683,21 +691,44 @@ export default function TillPage() {
   function openVoid() {
     if (!receipt?.id || voiding) return;
     setVoidError("");
+    setVoidReason("");
+    setVoidPin("");
     setVoidPinReset((current) => current + 1);
     setVoidOpen(true);
   }
 
-  async function submitVoid(pin: string) {
+  async function submitVoid() {
     if (!receipt?.id || voiding) return;
+    const reason = voidReason.trim();
+    if (!reason) {
+      setVoidError("Enter a reason for this void.");
+      return;
+    }
+    if (voidPin.length !== 4) {
+      setVoidError("Enter the manager 4-digit PIN.");
+      return;
+    }
     setVoidError("");
     try {
-      await voidTicket({
-        variables: { saleId: receipt.id, managerPin: pin, reason: "Voided at the till" },
+      const result = await voidTicket({
+        variables: { saleId: receipt.id, managerPin: voidPin, reason },
       });
-      setNotice(`${receipt.receiptNumber} voided`);
+      const message = resultError(result);
+      const sale = (result.data?.voidMartTicket?.sale ?? result.data?.data?.voidMartTicket?.sale) as
+        | { receiptNumber?: string; status?: string }
+        | undefined;
+      if (message || !sale || sale.status !== "voided") {
+        setVoidError(message || "This sale cannot be voided.");
+        setVoidPin("");
+        setVoidPinReset((current) => current + 1);
+        return;
+      }
+      setNotice(`${sale.receiptNumber || receipt.receiptNumber} voided`);
+      setVoidOpen(false);
       closeReceipt();
     } catch (err) {
       setVoidError(errorText(err));
+      setVoidPin("");
       setVoidPinReset((current) => current + 1);
     }
   }
@@ -1137,21 +1168,39 @@ export default function TillPage() {
             <p>{receipt.receiptNumber}</p>
             <p>Amount to void</p>
             <p className="due">{money(Number(receipt.total))}</p>
+            <label className="void-reason">
+              Reason for void
+              <textarea
+                value={voidReason}
+                onChange={(event) => {
+                  setVoidReason(event.target.value);
+                  setVoidError("");
+                }}
+                rows={3}
+                maxLength={500}
+                placeholder="Why is this sale being voided?"
+                disabled={voiding}
+              />
+            </label>
             <p>Enter the manager 4-digit PIN.</p>
             {voidError ? <p className="error">{voidError}</p> : null}
             <PinDigits
               disabled={voiding}
               hasError={Boolean(voidError)}
               resetKey={voidPinReset}
-              onEdit={() => setVoidError("")}
-              onComplete={(value) => {
-                void submitVoid(value);
+              onEdit={() => {
+                setVoidError("");
+                setVoidPin("");
               }}
+              onComplete={(value) => setVoidPin(value)}
             />
             {voiding ? <p>Voiding…</p> : null}
             <div className="actions">
               <button className="ghost" type="button" onClick={() => setVoidOpen(false)} disabled={voiding}>
                 Cancel
+              </button>
+              <button className="danger" type="button" onClick={() => void submitVoid()} disabled={voiding}>
+                Void sale
               </button>
             </div>
           </div>
