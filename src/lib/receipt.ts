@@ -22,7 +22,7 @@ export type ReceiptSale = {
   payments?: { method: string; amount: string; bankName?: string | null }[] | null;
 };
 
-const RULE = "───────────────────────────────────────";
+const RULE = "---------------------------------------";
 const WIDTH = 39;
 
 function money(value: number) {
@@ -47,21 +47,55 @@ function centerLine(text: string) {
   return `${" ".repeat(Math.max(0, padLeft))}${clean}`;
 }
 
+function wrapCentered(text: string) {
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (!clean) return [] as string[];
+  const words = clean.split(" ");
+  const lines: string[] = [];
+  let current = "";
+  words.forEach((word) => {
+    const next = current ? `${current} ${word}` : word;
+    if (next.length > WIDTH && current) {
+      lines.push(centerLine(current));
+      current = word;
+    } else {
+      current = next;
+    }
+  });
+  if (current) lines.push(centerLine(current));
+  return lines;
+}
+
+function fieldText(row: Record<string, unknown>, camel: string, snake: string) {
+  const value = row[camel] ?? row[snake];
+  if (value == null) return "";
+  return String(value).trim();
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+}
+
+function pushDetail(lines: string[], label: string, value?: string | null) {
+  const text = (value || "").trim();
+  if (!text) return;
+  lines.push(...wrapCentered(`${label}: ${text}`));
+}
+
 function header(details: ReceiptBranch | null | undefined) {
   if (!details) return "";
   const lines: string[] = [];
   const title = details.businessName?.trim() || details.branchAlias?.trim();
-  if (title) lines.push(centerLine(title.toUpperCase()));
+  if (title) lines.push(...wrapCentered(title.toUpperCase()));
   if (details.branchAlias?.trim()) lines.push(centerLine(`Branch Code: ${details.branchAlias.trim()}`));
-  const street = details.branchAddress?.trim();
-  const cityLine = [details.branchCity, details.branchState].filter(Boolean).join(", ").trim();
-  const country = details.branchCountry?.trim();
-  const compact = [street, cityLine, country].filter(Boolean).join(", ");
-  if (compact) lines.push(centerLine(`Address: ${compact}`));
-  const phones = [details.branchPhone, details.branchPhoneMobile].filter(Boolean);
-  if (phones.length) lines.push(centerLine(`Tel: ${phones.join(" | ")}`));
-  if (details.branchEmail?.trim()) lines.push(centerLine(`Email: ${details.branchEmail.trim()}`));
-  if (details.branchWebsiteUrl?.trim()) lines.push(centerLine(`Web: ${details.branchWebsiteUrl.trim()}`));
+  pushDetail(lines, "Address", details.branchAddress);
+  pushDetail(lines, "City", details.branchCity);
+  pushDetail(lines, "State", details.branchState);
+  pushDetail(lines, "Country", details.branchCountry);
+  pushDetail(lines, "Phone", details.branchPhone);
+  pushDetail(lines, "Mobile", details.branchPhoneMobile);
+  pushDetail(lines, "Email", details.branchEmail);
+  pushDetail(lines, "Website", details.branchWebsiteUrl);
   if (!lines.length) return "";
   return `${lines.join("\n")}\n${RULE}\n`;
 }
@@ -83,22 +117,46 @@ function methodLabel(method: string, bankName?: string | null) {
 }
 
 export function receiptBranch(data: unknown): ReceiptBranch | null {
-  const root = (data && typeof data === "object" && "data" in data
-    ? (data as { data?: unknown }).data
-    : data) as {
-    branchAddresses?: ReceiptBranch | ReceiptBranch[];
-    getBusinessBranch?: { status?: boolean; data?: { branchAlias?: string; business?: { businessName?: string } } };
-  } | null;
-  if (!root) return null;
-  const raw = root.branchAddresses;
-  const address = Array.isArray(raw) ? raw.find((row) => (row as { isPrimary?: boolean }).isPrimary) || raw[0] : raw;
-  const business = root.getBusinessBranch?.status ? root.getBusinessBranch.data : undefined;
+  let current = asRecord(data);
+  if (current && asRecord(current.data) && !("getBusinessBranch" in current) && !("branchAddresses" in current)) {
+    current = asRecord(current.data);
+  }
+  if (!current) return null;
+  const raw = current.branchAddresses ?? current.branch_addresses;
+  const addressRow = Array.isArray(raw)
+    ? raw.find((row) => Boolean(asRecord(row)?.isPrimary ?? asRecord(row)?.is_primary)) || raw[0]
+    : raw;
+  const address = asRecord(addressRow);
+  const branchPayload = asRecord(current.getBusinessBranch);
+  const branchData = branchPayload?.status === false ? null : asRecord(branchPayload?.data);
+  const business = asRecord(branchData?.business);
+  const company = business || {};
+  const place = address || {};
   const merged: ReceiptBranch = {
-    ...(address || {}),
-    businessName: business?.business?.businessName,
-    branchAlias: business?.branchAlias || address?.branchAlias,
+    businessName: fieldText(company, "businessName", "business_name"),
+    branchAlias: fieldText(branchData || {}, "branchAlias", "branch_alias") || fieldText(place, "branchAlias", "branch_alias"),
+    branchAddress: fieldText(place, "branchAddress", "branch_address") || fieldText(company, "businessAddress", "business_address"),
+    branchCity:
+      fieldText(place, "branchCity", "branch_city") ||
+      fieldText(company, "businessCity", "business_city") ||
+      fieldText(company, "city", "city"),
+    branchState: fieldText(place, "branchState", "branch_state") || fieldText(company, "businessState", "business_state"),
+    branchCountry:
+      fieldText(place, "branchCountry", "branch_country") ||
+      fieldText(company, "businessCountry", "business_country") ||
+      fieldText(company, "country", "country"),
+    branchPhone: fieldText(place, "branchPhone", "branch_phone") || fieldText(company, "businessPhone", "business_phone"),
+    branchPhoneMobile:
+      fieldText(place, "branchPhoneMobile", "branch_phone_mobile") ||
+      fieldText(company, "businessPhoneMobile", "business_phone_mobile"),
+    branchEmail: fieldText(place, "branchEmail", "branch_email") || fieldText(company, "businessEmail", "business_email"),
+    branchWebsiteUrl:
+      fieldText(place, "branchWebsiteUrl", "branch_website_url") ||
+      fieldText(company, "businessWebsiteUrl", "business_website_url"),
   };
-  if (!merged.businessName && !merged.branchAddress && !merged.branchAlias && !merged.branchPhone) return null;
+  if (!merged.businessName && !merged.branchAddress && !merged.branchAlias && !merged.branchPhone && !merged.branchEmail) {
+    return null;
+  }
   return merged;
 }
 
@@ -124,7 +182,7 @@ export function buildMartReceipt(
     .map((line) => {
       const qty = Number(line.quantity);
       const qtyText = Number.isFinite(qty) && qty % 1 === 0 ? String(qty) : String(line.quantity);
-      return itemLine(`${qtyText}x ${line.name || "—"}`, money(amount(line.lineTotal)));
+      return itemLine(`${qtyText}x ${line.name || "-"}`, money(amount(line.lineTotal)));
     })
     .join("\n");
   const subtotal = amount(sale.subtotal);
@@ -140,15 +198,15 @@ export function buildMartReceipt(
 
   return `${header(branch)}SALES RECEIPT
 
-Sales #: ${sale.receiptNumber || "—"}
+Sales #: ${sale.receiptNumber || "-"}
 Type: COUNTER
 Time: ${new Date().toLocaleString()}
-Cashier: ${cashier || "—"}
+Cashier: ${cashier || "-"}
 
 ${RULE}
 ITEMS
 ${RULE}
-${lines || "—"}
+${lines || "-"}
 
 ${RULE}
 TOTALS

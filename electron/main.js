@@ -1,4 +1,5 @@
 const { app, BrowserWindow, ipcMain } = require("electron");
+const { spawn } = require("child_process");
 const os = require("os");
 const path = require("path");
 const fs = require("fs");
@@ -234,7 +235,124 @@ function terminalMac() {
 
 ipcMain.handle("get-terminal-mac", () => terminalMac());
 
-ipcMain.handle("print-receipt", async (_event, plainText, deviceName) => {
+function receiptBytes(plainText) {
+  const ascii = String(plainText || "")
+    .replace(/[\u2500-\u257F]/g, "-")
+    .replace(/[\u2010-\u2015\u2212]/g, "-")
+    .replace(/\u00A0/g, " ")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/[^\n\x20-\x7E]/g, "");
+  const body = Buffer.from(`${ascii.replace(/\n/g, "\r\n")}\r\n`, "ascii");
+  return Buffer.concat([
+    Buffer.from([0x1b, 0x40]),
+    Buffer.from([0x1b, 0x61, 0x00]),
+    Buffer.from([0x1b, 0x4d, 0x00]),
+    body,
+    Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x1d, 0x56, 0x00]),
+  ]);
+}
+
+const RAW_PRINT_SCRIPT = path.join(os.tmpdir(), "stayview-mart-raw-print.ps1");
+
+function ensureRawPrintScript() {
+  if (fs.existsSync(RAW_PRINT_SCRIPT)) return;
+  fs.writeFileSync(
+    RAW_PRINT_SCRIPT,
+    `
+param([string]$PrinterName, [string]$BinPath)
+$ErrorActionPreference = 'Stop'
+Add-Type -TypeDefinition @"
+using System;
+using System.IO;
+using System.Runtime.InteropServices;
+public class StayViewRawPrinter {
+  [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+  public class DOCINFOA {
+    [MarshalAs(UnmanagedType.LPStr)] public string pDocName;
+    [MarshalAs(UnmanagedType.LPStr)] public string pOutputFile;
+    [MarshalAs(UnmanagedType.LPStr)] public string pDataType;
+  }
+  [DllImport("winspool.drv", EntryPoint="OpenPrinterA", SetLastError=true, CharSet=CharSet.Ansi)]
+  public static extern bool OpenPrinter(string szPrinter, out IntPtr hPrinter, IntPtr pd);
+  [DllImport("winspool.drv", SetLastError=true)]
+  public static extern bool ClosePrinter(IntPtr hPrinter);
+  [DllImport("winspool.drv", EntryPoint="StartDocPrinterA", SetLastError=true, CharSet=CharSet.Ansi)]
+  public static extern bool StartDocPrinter(IntPtr hPrinter, int level, [In] DOCINFOA di);
+  [DllImport("winspool.drv", SetLastError=true)]
+  public static extern bool EndDocPrinter(IntPtr hPrinter);
+  [DllImport("winspool.drv", SetLastError=true)]
+  public static extern bool StartPagePrinter(IntPtr hPrinter);
+  [DllImport("winspool.drv", SetLastError=true)]
+  public static extern bool EndPagePrinter(IntPtr hPrinter);
+  [DllImport("winspool.drv", SetLastError=true)]
+  public static extern bool WritePrinter(IntPtr hPrinter, IntPtr pBytes, int dwCount, out int dwWritten);
+  public static void Send(string printer, string path) {
+    byte[] bytes = File.ReadAllBytes(path);
+    IntPtr handle;
+    if (!OpenPrinter(printer, out handle, IntPtr.Zero)) throw new System.ComponentModel.Win32Exception();
+    try {
+      DOCINFOA info = new DOCINFOA();
+      info.pDocName = "StayView Receipt";
+      info.pDataType = "RAW";
+      if (!StartDocPrinter(handle, 1, info)) throw new System.ComponentModel.Win32Exception();
+      try {
+        if (!StartPagePrinter(handle)) throw new System.ComponentModel.Win32Exception();
+        IntPtr buffer = Marshal.AllocCoTaskMem(bytes.Length);
+        try {
+          Marshal.Copy(bytes, 0, buffer, bytes.Length);
+          int written;
+          if (!WritePrinter(handle, buffer, bytes.Length, out written)) throw new System.ComponentModel.Win32Exception();
+        } finally { Marshal.FreeCoTaskMem(buffer); }
+        EndPagePrinter(handle);
+      } finally { EndDocPrinter(handle); }
+    } finally { ClosePrinter(handle); }
+  }
+}
+"@
+[StayViewRawPrinter]::Send($PrinterName, $BinPath)
+`,
+    "utf8",
+  );
+}
+
+function sendRawWindowsPrinter(printerName, bytes) {
+  ensureRawPrintScript();
+  const binPath = path.join(os.tmpdir(), `stayview-receipt-${Date.now()}.bin`);
+  fs.writeFileSync(binPath, bytes);
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      "powershell.exe",
+      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", RAW_PRINT_SCRIPT, printerName, binPath],
+      { windowsHide: true },
+    );
+    let errorText = "";
+    child.stderr.on("data", (chunk) => {
+      errorText += chunk.toString();
+    });
+    child.on("error", (error) => {
+      fs.unlink(binPath, () => {});
+      reject(error);
+    });
+    child.on("close", (code) => {
+      fs.unlink(binPath, () => {});
+      if (code === 0) resolve();
+      else reject(new Error(errorText.trim() || `Receipt printer rejected the job (${code})`));
+    });
+  });
+}
+
+async function resolvePrinterName(deviceName) {
+  const wanted = deviceName && String(deviceName).trim();
+  if (wanted) return wanted;
+  await ensureSilentPrintWindow();
+  const printers = await silentPrintWindow.webContents.getPrintersAsync();
+  const chosen = (printers || []).find((printer) => printer.isDefault) || (printers || [])[0];
+  if (!chosen || !chosen.name) throw new Error("No printer is installed");
+  return chosen.name;
+}
+
+async function printHtmlSilent(plainText, deviceName) {
   await ensureSilentPrintWindow();
   const win = silentPrintWindow;
   if (!win || win.isDestroyed()) throw new Error("Print window unavailable");
@@ -249,6 +367,15 @@ ipcMain.handle("print-receipt", async (_event, plainText, deviceName) => {
       else reject(new Error(failureReason || "Print failed"));
     });
   });
+}
+
+ipcMain.handle("print-receipt", async (_event, plainText, deviceName) => {
+  if (process.platform === "win32") {
+    const printerName = await resolvePrinterName(deviceName);
+    await sendRawWindowsPrinter(printerName, receiptBytes(plainText));
+    return { ok: true };
+  }
+  await printHtmlSilent(plainText, deviceName);
   return { ok: true };
 });
 
@@ -275,7 +402,7 @@ ipcMain.handle("print-raw-network", async (_event, payload) => {
   const port = Number(payload && payload.port) || 9100;
   const plainText = payload && payload.plainText != null ? String(payload.plainText) : "";
   if (!host) throw new Error("Network printer host is required");
-  const data = Buffer.from(`${plainText}\n\n\n\x1D\x56\x00`, "utf8");
+  const data = receiptBytes(plainText);
   await new Promise((resolve, reject) => {
     const socket = net.connect({ host, port }, () => {
       socket.write(data, (err) => {

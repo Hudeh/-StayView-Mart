@@ -55,7 +55,22 @@ const HEADER = gql`
     }
     getBusinessBranch(branchAlias: $branchAlias) {
       status
-      data { branchAlias business { businessName } }
+      data {
+        branchAlias
+        business {
+          businessName
+          city
+          country
+          businessAddress
+          businessPhone
+          businessPhoneMobile
+          businessEmail
+          businessWebsiteUrl
+          businessCity
+          businessState
+          businessCountry
+        }
+      }
     }
     martReceiptSettings { footer maxPrints }
   }
@@ -368,11 +383,11 @@ export default function TillPage() {
   const slipSettings = receiptSettings(headerQuery.data);
   const printLimitReached = printsUsed >= slipSettings.maxPrints;
 
-  function slipFor(sale: Sale, footer = slipSettings.footer) {
+  function slipFor(sale: Sale, footer = slipSettings.footer, source: unknown = headerQuery.data) {
     return buildMartReceipt(
       sale,
       displayName,
-      receiptBranch(headerQuery.data) || { branchAlias: getPropertyCode() },
+      receiptBranch(source) || { branchAlias: getPropertyCode() },
       footer,
     );
   }
@@ -532,7 +547,7 @@ export default function TillPage() {
       setPrintsUsed(0);
       const fresh = await headerQuery.refetch();
       const latest = receiptSettings(fresh.data);
-      const printed = await printMartReceipt(slipFor(sale, latest.footer));
+      const printed = await printMartReceipt(slipFor(sale, latest.footer, fresh.data));
       if (printed) setPrintsUsed(1);
       setCart([]);
       setHeldId(null);
