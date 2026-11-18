@@ -178,6 +178,12 @@ const VOID = gql`
   }
 `;
 
+const AUTHORIZE_PIN = gql`
+  mutation authorizeMartManagerPin($managerPin: String!) {
+    authorizeMartManagerPin(managerPin: $managerPin) { success message }
+  }
+`;
+
 type Item = {
   productId: string;
   variantId?: string | null;
@@ -302,10 +308,14 @@ export default function TillPage() {
   const [floatAmount, setFloatAmount] = useState("0");
   const [heldId, setHeldId] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<Sale | null>(null);
+  const [receiptRecalled, setReceiptRecalled] = useState(false);
   const [printsUsed, setPrintsUsed] = useState(0);
   const [voidOpen, setVoidOpen] = useState(false);
   const [voidError, setVoidError] = useState("");
   const [voidPinReset, setVoidPinReset] = useState(0);
+  const [reprintOpen, setReprintOpen] = useState(false);
+  const [reprintError, setReprintError] = useState("");
+  const [reprintPinReset, setReprintPinReset] = useState(0);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [working, setWorking] = useState<"pay" | "hold" | null>(null);
@@ -335,6 +345,7 @@ export default function TillPage() {
   const [completeSale] = useMutation(COMPLETE);
   const [holdTicket] = useMutation(HOLD);
   const [voidTicket, { loading: voiding }] = useMutation(VOID);
+  const [authorizePin, { loading: authorizingReprint }] = useMutation(AUTHORIZE_PIN);
   const [unlockTill, { loading: unlocking }] = useMutation(UNLOCK);
 
   useEffect(() => {
@@ -368,8 +379,10 @@ export default function TillPage() {
 
   function closeReceipt() {
     setReceipt(null);
+    setReceiptRecalled(false);
     setPrintsUsed(0);
     setVoidOpen(false);
+    setReprintOpen(false);
   }
   const photoUrl = cashier?.photoUrl || "";
   const initials = displayName
@@ -515,6 +528,7 @@ export default function TillPage() {
         return;
       }
       setReceipt(sale);
+      setReceiptRecalled(false);
       setPrintsUsed(0);
       const fresh = await headerQuery.refetch();
       const latest = receiptSettings(fresh.data);
@@ -590,7 +604,8 @@ export default function TillPage() {
         return;
       }
       setReceipt(sale);
-      setPrintsUsed(0);
+      setReceiptRecalled(true);
+      setPrintsUsed(1);
       setNotice(`Recalled ${sale.receiptNumber}`);
     } catch (err) {
       setError(errorText(err));
@@ -611,6 +626,43 @@ export default function TillPage() {
     setTransfer(amount.toFixed(2));
     setBankOpen(false);
     setError("");
+  }
+
+  function openReprint() {
+    if (!receipt || printLimitReached) return;
+    if (!receiptRecalled) {
+      void printMartReceipt(slipFor(receipt)).then((printed) => {
+        if (printed) setPrintsUsed((used) => used + 1);
+      });
+      return;
+    }
+    if (slipSettings.maxPrints < 2) {
+      setError("A recalled receipt can be reprinted only when copies are set to 2.");
+      return;
+    }
+    setReprintError("");
+    setReprintPinReset((current) => current + 1);
+    setReprintOpen(true);
+  }
+
+  async function submitReprint(pin: string) {
+    if (!receipt || authorizingReprint) return;
+    setReprintError("");
+    try {
+      const result = await authorizePin({ variables: { managerPin: pin } });
+      const payload = result.data?.authorizeMartManagerPin ?? result.data?.data?.authorizeMartManagerPin;
+      if (!payload?.success) {
+        setReprintError(payload?.message || "Manager PIN was not accepted.");
+        setReprintPinReset((current) => current + 1);
+        return;
+      }
+      setReprintOpen(false);
+      const printed = await printMartReceipt(slipFor(receipt));
+      if (printed) setPrintsUsed((used) => used + 1);
+    } catch (err) {
+      setReprintError(errorText(err));
+      setReprintPinReset((current) => current + 1);
+    }
   }
 
   function openVoid() {
@@ -797,15 +849,10 @@ export default function TillPage() {
                 <button
                   className="ghost"
                   type="button"
-                  disabled={printLimitReached}
-                  onClick={() => {
-                    if (printLimitReached) return;
-                    void printMartReceipt(slipFor(receipt)).then((printed) => {
-                      if (printed) setPrintsUsed((used) => used + 1);
-                    });
-                  }}
+                  disabled={printLimitReached || (receiptRecalled && slipSettings.maxPrints < 2)}
+                  onClick={openReprint}
                 >
-                  Print receipt
+                  {receiptRecalled ? "Reprint receipt" : "Print receipt"}
                 </button>
                 <button className="danger" type="button" onClick={openVoid} disabled={voiding}>
                   Void with manager PIN
@@ -1039,6 +1086,30 @@ export default function TillPage() {
               </button>
               <button className="primary" type="button" onClick={confirmTransfer}>
                 Use this bank
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {reprintOpen && receipt ? (
+        <div className="modal-back" role="presentation">
+          <div className="modal void-modal" role="dialog" aria-labelledby="reprint-title">
+            <h2 id="reprint-title">Reprint receipt</h2>
+            <p>{receipt.receiptNumber}</p>
+            <p>Enter the manager 4-digit PIN.</p>
+            {reprintError ? <p className="error">{reprintError}</p> : null}
+            <PinDigits
+              disabled={authorizingReprint}
+              hasError={Boolean(reprintError)}
+              resetKey={reprintPinReset}
+              onEdit={() => setReprintError("")}
+              onComplete={(value) => {
+                void submitReprint(value);
+              }}
+            />
+            <div className="actions">
+              <button className="ghost" type="button" onClick={() => setReprintOpen(false)} disabled={authorizingReprint}>
+                Cancel
               </button>
             </div>
           </div>

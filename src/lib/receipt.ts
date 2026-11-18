@@ -181,8 +181,9 @@ export async function printMartReceipt(plainText: string): Promise<boolean> {
       await api.printRawNetwork(endpoint.host, endpoint.port || 9100, plainText);
       return true;
     }
-    if (endpoint.connection !== "browser" && api?.printReceiptSilent) {
-      await api.printReceiptSilent(plainText, endpoint.deviceName || null);
+    if (api?.printReceiptSilent) {
+      const deviceName = endpoint.connection === "os" ? endpoint.deviceName || null : null;
+      await api.printReceiptSilent(plainText, deviceName);
       return true;
     }
   } catch (error) {

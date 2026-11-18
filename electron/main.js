@@ -174,6 +174,24 @@ function createMainWindow(propertyCode, explicitUrl) {
     },
   });
   mainWindow.loadURL(url);
+  let signingOut = false;
+  mainWindow.on("close", (event) => {
+    if (signingOut || !mainWindow || mainWindow.isDestroyed()) return;
+    event.preventDefault();
+    signingOut = true;
+    const clearSession = `
+      try {
+        localStorage.removeItem("mart-accessToken");
+        localStorage.removeItem("mart-refreshToken");
+        localStorage.removeItem("mart-cashier");
+        sessionStorage.removeItem("mart-screen-locked");
+      } catch (e) {}
+    `;
+    const finish = () => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy();
+    };
+    mainWindow.webContents.executeJavaScript(clearSession).then(finish, finish);
+  });
   mainWindow.on("closed", () => {
     mainWindow = null;
   });

@@ -40,7 +40,7 @@ function BranchApiGate({ children }: { children: React.ReactNode }) {
   return (
     <main className="login">
       <StayViewMartMark />
-      {state === "pending" ? <p>Finding this property…</p> : null}
+      {state === "pending" ? <div className="spinner" role="status" aria-label="Loading" /> : null}
       {state === "missing" ? (
         <p>Open this till from the property address. The property code is part of that address.</p>
       ) : null}
