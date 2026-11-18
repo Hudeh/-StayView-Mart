@@ -243,6 +243,10 @@ input:disabled, select:disabled, .field-btn:disabled { opacity: 0.4; cursor: not
 .row { display: flex; gap: 8px; }
 .row > * { flex: 1; }
 .hits { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; max-height: 220px; overflow: auto; }
+.hit.out,
+.hit:disabled {
+  opacity: 0.45; filter: grayscale(1); cursor: not-allowed; background: #f3f1f6;
+}
 .hit, .line {
   display: flex; justify-content: space-between; gap: 12px; align-items: center;
   padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: white; text-align: left;
@@ -256,7 +260,7 @@ input:disabled, select:disabled, .field-btn:disabled { opacity: 0.4; cursor: not
   width: 36px; height: 36px; padding: 0; border: 0; border-radius: 8px;
   background: var(--brand); color: #fff; font-size: 22px; font-weight: 700; line-height: 1;
 }
-.qty button:hover { background: var(--brand-dark); }
+.qty button:disabled { opacity: 0.4; cursor: not-allowed; }
 .qty strong { min-width: 1.6rem; text-align: center; color: var(--brand-dark); }
 .totals { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; }
 .due { font-size: 28px; font-weight: 800; color: var(--brand-dark); }

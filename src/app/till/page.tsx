@@ -242,10 +242,20 @@ function money(value: number) {
   return value.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function stockText(value?: string | null) {
-  if (value == null || value === "") return "";
+function stockAmount(value?: string | null) {
+  if (value == null || value === "") return null;
   const amount = Number(value);
-  if (!Number.isFinite(amount)) return "";
+  return Number.isFinite(amount) ? amount : null;
+}
+
+function outOfStock(item: { quantityOnHand?: string | null }) {
+  const amount = stockAmount(item.quantityOnHand);
+  return amount != null && amount <= 0;
+}
+
+function stockText(value?: string | null) {
+  const amount = stockAmount(value);
+  if (amount == null) return "";
   const text = Number.isInteger(amount) ? String(amount) : String(Math.round(amount * 1000) / 1000);
   return `stock ${text}`;
 }
@@ -449,18 +459,34 @@ export default function TillPage() {
   function changeQty(index: number, delta: number) {
     setCart((current) =>
       current
-        .map((row, i) => (i === index ? { ...row, quantity: row.quantity + delta } : row))
+        .map((row, i) => {
+          if (i !== index) return row;
+          const next = row.quantity + delta;
+          const onHand = stockAmount(row.quantityOnHand);
+          if (delta > 0 && onHand != null && next > onHand) return row;
+          return { ...row, quantity: next };
+        })
         .filter((row) => row.quantity > 0),
     );
   }
 
   function addItem(item: Item) {
+    if (outOfStock(item)) {
+      setError(`${item.name} is out of stock.`);
+      return;
+    }
     setCart((current) => {
       const index = current.findIndex(
         (line) => line.productId === item.productId && line.variantId === item.variantId,
       );
-      if (index === -1) return [...current, { ...item, quantity: 1 }];
-      return current.map((line, i) => (i === index ? { ...line, quantity: line.quantity + 1 } : line));
+      const onHand = stockAmount(item.quantityOnHand);
+      if (index === -1) {
+        if (onHand != null && onHand < 1) return current;
+        return [...current, { ...item, quantity: 1 }];
+      }
+      const next = current[index].quantity + 1;
+      if (onHand != null && next > onHand) return current;
+      return current.map((line, i) => (i === index ? { ...line, quantity: next } : line));
     });
     setScan("");
     setHits([]);
@@ -868,7 +894,13 @@ export default function TillPage() {
           </form>
           <div className="hits">
             {hits.map((item) => (
-              <button className="hit" type="button" key={`${item.productId}-${item.variantId || ""}`} onClick={() => addItem(item)}>
+              <button
+                className={outOfStock(item) ? "hit out" : "hit"}
+                type="button"
+                key={`${item.productId}-${item.variantId || ""}`}
+                disabled={outOfStock(item)}
+                onClick={() => addItem(item)}
+              >
                 <span>
                   <strong>{item.name}</strong>
                   <br />
@@ -925,7 +957,13 @@ export default function TillPage() {
               <div className="hits">
                 {categoryProductsQuery.loading ? <p>Loading products…</p> : null}
                 {(categoryProductsQuery.data?.martCategoryProducts || categoryProductsQuery.data?.data?.martCategoryProducts || []).map((item: Item) => (
-                  <button className="hit" type="button" key={`${item.productId}-${item.variantId || ""}`} onClick={() => addItem(item)}>
+                  <button
+                    className={outOfStock(item) ? "hit out" : "hit"}
+                    type="button"
+                    key={`${item.productId}-${item.variantId || ""}`}
+                    disabled={outOfStock(item)}
+                    onClick={() => addItem(item)}
+                  >
                     <span>
                       <strong>{item.name}</strong>
                       <br />
@@ -989,7 +1027,15 @@ export default function TillPage() {
                     −
                   </button>
                   <strong>{line.quantity}</strong>
-                  <button type="button" aria-label={`Increase ${line.name}`} onClick={() => changeQty(index, 1)}>
+                  <button
+                    type="button"
+                    aria-label={`Increase ${line.name}`}
+                    disabled={(() => {
+                      const onHand = stockAmount(line.quantityOnHand);
+                      return onHand != null && line.quantity >= onHand;
+                    })()}
+                    onClick={() => changeQty(index, 1)}
+                  >
                     +
                   </button>
                 </div>

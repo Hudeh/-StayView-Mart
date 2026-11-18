@@ -41,10 +41,13 @@
       "icon": "public/icon.ico",
       "signAndEditExecutable": false
     },
+    "afterPack": "scripts/stamp-mart-icon.js",
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "shortcutName": "StayView Mart"
+      "shortcutName": "StayView Mart",
+      "installerIcon": "public/icon.ico",
+      "uninstallerIcon": "public/icon.ico"
     }
   }
 }

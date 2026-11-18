@@ -45,14 +45,16 @@ const bundledConfig = readBundledConfig();
 function windowIcon() {
   const png = path.join(__dirname, "..", "public", "icon.png");
   const ico = path.join(__dirname, "..", "public", "icon.ico");
+  if (process.platform === "win32" && fs.existsSync(ico)) return ico;
   if (fs.existsSync(png)) return png;
   if (fs.existsSync(ico)) return ico;
   return undefined;
 }
 
 const APP_NAME = "StayView Mart";
+const APP_USER_MODEL_ID = "com.stayview.mart";
 app.setName(APP_NAME);
-if (process.platform === "win32") app.setAppUserModelId(APP_NAME);
+if (process.platform === "win32") app.setAppUserModelId(APP_USER_MODEL_ID);
 
 const PORT = process.env.NEXT_PUBLIC_APP_PORT || "3003";
 const APP_PROTOCOL = process.env.NEXT_PUBLIC_APP_PROTOCOL || "http";

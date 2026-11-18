@@ -90,7 +90,7 @@ function header(details: ReceiptBranch | null | undefined) {
   if (title) lines.push(...wrapLeft(title.toUpperCase()));
   if (details.branchAlias?.trim()) lines.push(...wrapLeft(`Branch Code: ${details.branchAlias.trim()}`));
   pushDetail(lines, "Address", details.branchAddress);
-  const phone = details.branchPhoneMobile?.trim() || details.branchPhone?.trim();
+  const phone = details.branchPhoneMobile?.trim() + (details.branchPhone?.trim() ? ", " + details.branchPhone?.trim() : "");
   pushDetail(lines, "Phone", phone);
   pushDetail(lines, "Email", details.branchEmail);
   // pushDetail(lines, "Website", details.branchWebsiteUrl);
