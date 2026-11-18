@@ -236,6 +236,7 @@ function terminalMac() {
 ipcMain.handle("get-terminal-mac", () => terminalMac());
 
 function receiptBytes(plainText) {
+  const columns = 39;
   const ascii = String(plainText || "")
     .replace(/[\u2500-\u257F]/g, "-")
     .replace(/[\u2010-\u2015\u2212]/g, "-")
@@ -243,7 +244,34 @@ function receiptBytes(plainText) {
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n")
     .replace(/[^\n\x20-\x7E]/g, "");
-  const body = Buffer.from(`${ascii.replace(/\n/g, "\r\n")}\r\n`, "ascii");
+  const wrapped = ascii.split("\n").flatMap((line) => {
+    const clean = line.trim();
+    if (!clean) return [""];
+    const pieces = [];
+    clean.split(/\s+/).forEach((word) => {
+      if (word.length <= columns) {
+        pieces.push(word);
+        return;
+      }
+      for (let index = 0; index < word.length; index += columns) {
+        pieces.push(word.slice(index, index + columns));
+      }
+    });
+    const rows = [];
+    let current = "";
+    pieces.forEach((word) => {
+      const next = current ? `${current} ${word}` : word;
+      if (next.length > columns && current) {
+        rows.push(current);
+        current = word;
+      } else {
+        current = next;
+      }
+    });
+    if (current) rows.push(current);
+    return rows;
+  });
+  const body = Buffer.from(`${wrapped.join("\n")}\n`, "ascii");
   return Buffer.concat([
     Buffer.from([0x1b, 0x40]),
     Buffer.from([0x1b, 0x61, 0x00]),

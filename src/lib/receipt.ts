@@ -22,8 +22,8 @@ export type ReceiptSale = {
   payments?: { method: string; amount: string; bankName?: string | null }[] | null;
 };
 
-const RULE = "---------------------------------------";
-const WIDTH = 39;
+const RULE = "--------------------------------";
+const WIDTH = 32;
 
 function money(value: number) {
   const amount = Number.isFinite(value) ? value : 0;
@@ -50,10 +50,19 @@ function centerLine(text: string) {
 function wrapCentered(text: string) {
   const clean = text.replace(/\s+/g, " ").trim();
   if (!clean) return [] as string[];
-  const words = clean.split(" ");
+  const pieces: string[] = [];
+  clean.split(" ").forEach((word) => {
+    if (word.length <= WIDTH) {
+      pieces.push(word);
+      return;
+    }
+    for (let index = 0; index < word.length; index += WIDTH) {
+      pieces.push(word.slice(index, index + WIDTH));
+    }
+  });
   const lines: string[] = [];
   let current = "";
-  words.forEach((word) => {
+  pieces.forEach((word) => {
     const next = current ? `${current} ${word}` : word;
     if (next.length > WIDTH && current) {
       lines.push(centerLine(current));
