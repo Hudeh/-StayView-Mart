@@ -37,16 +37,64 @@ function base64ToBytes(value: string): Uint8Array {
   return out;
 }
 
+const DIRECTORY_FALLBACK = "http://localhost:8000/api/";
+
+type RuntimeConfig = {
+  apiBaseUrl: string;
+  aesSecretKey: string;
+  aesIv: string;
+  pinApi: boolean;
+};
+
+let runtimeConfigPromise: Promise<RuntimeConfig> | null = null;
+
+function loadRuntimeConfig(): Promise<RuntimeConfig> {
+  if (typeof window === "undefined") {
+    return Promise.resolve({
+      apiBaseUrl: DIRECTORY_FALLBACK,
+      aesSecretKey: "",
+      aesIv: "",
+      pinApi: false,
+    });
+  }
+  if (!runtimeConfigPromise) {
+    runtimeConfigPromise = fetch("/runtime-config", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((body: Partial<RuntimeConfig>) => ({
+        apiBaseUrl: (body.apiBaseUrl || "").trim(),
+        aesSecretKey: (body.aesSecretKey || "").trim(),
+        aesIv: (body.aesIv || "").trim(),
+        pinApi: Boolean(body.pinApi),
+      }))
+      .catch(() => ({
+        apiBaseUrl: "",
+        aesSecretKey: "",
+        aesIv: "",
+        pinApi: false,
+      }));
+  }
+  return runtimeConfigPromise;
+}
+
+async function aesMaterial() {
+  const config = await loadRuntimeConfig();
+  return {
+    key: config.aesSecretKey || process.env.NEXT_PUBLIC_AES_SECRET_KEY || "",
+    iv: config.aesIv || process.env.NEXT_PUBLIC_AES_IV || "",
+  };
+}
+
 async function aesKey() {
-  const raw = hexToBytes(process.env.NEXT_PUBLIC_AES_SECRET_KEY || "");
+  const { key } = await aesMaterial();
+  const raw = hexToBytes(key);
   return crypto.subtle.importKey("raw", raw.buffer as ArrayBuffer, "AES-CBC", false, ["encrypt", "decrypt"]);
 }
 
 export async function encryptJSON(data: unknown): Promise<string> {
-  const iv = hexToBytes(process.env.NEXT_PUBLIC_AES_IV || "");
+  const { iv } = await aesMaterial();
   const encoded = new TextEncoder().encode(JSON.stringify(data ?? {}));
   const encrypted = await crypto.subtle.encrypt(
-    { name: "AES-CBC", iv: iv.buffer as ArrayBuffer },
+    { name: "AES-CBC", iv: hexToBytes(iv).buffer as ArrayBuffer },
     await aesKey(),
     encoded,
   );
@@ -54,13 +102,12 @@ export async function encryptJSON(data: unknown): Promise<string> {
 }
 
 export async function decryptJSON(payload: string): Promise<Record<string, unknown>> {
-  const iv = hexToBytes(process.env.NEXT_PUBLIC_AES_IV || "");
+  const { iv } = await aesMaterial();
   const decrypted = await crypto.subtle.decrypt(
-    { name: "AES-CBC", iv: iv.buffer as ArrayBuffer },
+    { name: "AES-CBC", iv: hexToBytes(iv).buffer as ArrayBuffer },
     await aesKey(),
     base64ToBytes(payload).buffer as ArrayBuffer,
   );
-  console.log("decrypted", JSON.parse(new TextDecoder().decode(decrypted)))
   return JSON.parse(new TextDecoder().decode(decrypted));
 }
 
@@ -92,10 +139,6 @@ export function normalizeApiBase(url: string): string {
 export function toGraphqlUrl(apiBase: string): string {
   return `${normalizeApiBase(apiBase)}graphql`;
 }
-
-const DIRECTORY_API = normalizeApiBase(
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api/",
-);
 
 export function persistBranchApi(branch: BranchApi): void {
   if (typeof window === "undefined" || !branch.branchApiDomain) return;
@@ -158,7 +201,9 @@ const GET_BRANCH = `
 export async function resolveBranchApi(propertyCode: string): Promise<BranchApi> {
   const alias = propertyCode.trim().toLowerCase();
   if (!alias) throw new Error("Property code is missing from the address.");
-  const response = await fetch(toGraphqlUrl(DIRECTORY_API), {
+  const config = await loadRuntimeConfig();
+  const directory = normalizeApiBase(config.apiBaseUrl || process.env.NEXT_PUBLIC_API_BASE_URL || DIRECTORY_FALLBACK);
+  const response = await fetch(toGraphqlUrl(directory), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -181,8 +226,11 @@ export async function resolveBranchApi(propertyCode: string): Promise<BranchApi>
   if (!payload?.status || !payload.data?.branchApiDomain) {
     throw new Error(payload?.msg || "Property code was not found.");
   }
-  persistBranchApi(payload.data);
-  return payload.data;
+  const branch = config.pinApi
+    ? { ...payload.data, branchApiDomain: directory, hybridEdgeEnabled: false, edgeApiDomain: "" }
+    : payload.data;
+  persistBranchApi(branch);
+  return branch;
 }
 
 export function requestHeaders(): Record<string, string> {

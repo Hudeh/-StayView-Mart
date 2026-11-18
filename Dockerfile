@@ -18,7 +18,9 @@ RUN npm config set fetch-retries 5 \
 
 COPY . .
 
-# NEXT_PUBLIC_* are inlined at build time. Override with --build-arg for a customer LAN.
+# NEXT_PUBLIC_* below are defaults for a local build only.
+# On a hotel PC, set MART_API_BASE_URL, MART_AES_SECRET_KEY, and MART_AES_IV
+# in .env.mart. The running container reads those without a new image.
 ARG NEXT_PUBLIC_API_BASE_URL='http://127.0.0.1:8000/api/'
 ARG NEXT_PUBLIC_AES_SECRET_KEY='change-me-hex-secret'
 ARG NEXT_PUBLIC_AES_IV='change-me-hex-iv'

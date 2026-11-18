@@ -2,7 +2,7 @@
 
 import { ApolloProvider } from "@apollo/client";
 import { useEffect, useMemo, useState } from "react";
-import { apiReadyFor, resolveBranchApi } from "@/lib/api";
+import { resolveBranchApi } from "@/lib/api";
 import { createMartClient } from "@/lib/apollo";
 import { StayViewMartMark } from "@/components/StayViewMark";
 import { getPropertyCode } from "@/lib/property";
@@ -15,10 +15,6 @@ function BranchApiGate({ children }: { children: React.ReactNode }) {
     const property = getPropertyCode();
     if (!property) {
       setState("missing");
-      return;
-    }
-    if (apiReadyFor(property)) {
-      setState("ready");
       return;
     }
     let cancelled = false;
