@@ -39,15 +39,7 @@ function amount(value?: string | null) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function centerLine(text: string) {
-  const clean = text.trim();
-  if (!clean) return "";
-  if (clean.length >= WIDTH) return clean;
-  const padLeft = Math.floor((WIDTH - clean.length) / 2);
-  return `${" ".repeat(Math.max(0, padLeft))}${clean}`;
-}
-
-function wrapCentered(text: string) {
+function wrapLeft(text: string) {
   const clean = text.replace(/\s+/g, " ").trim();
   if (!clean) return [] as string[];
   const pieces: string[] = [];
@@ -65,13 +57,13 @@ function wrapCentered(text: string) {
   pieces.forEach((word) => {
     const next = current ? `${current} ${word}` : word;
     if (next.length > WIDTH && current) {
-      lines.push(centerLine(current));
+      lines.push(current);
       current = word;
     } else {
       current = next;
     }
   });
-  if (current) lines.push(centerLine(current));
+  if (current) lines.push(current);
   return lines;
 }
 
@@ -88,23 +80,20 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 function pushDetail(lines: string[], label: string, value?: string | null) {
   const text = (value || "").trim();
   if (!text) return;
-  lines.push(...wrapCentered(`${label}: ${text}`));
+  lines.push(...wrapLeft(`${label}: ${text}`));
 }
 
 function header(details: ReceiptBranch | null | undefined) {
   if (!details) return "";
   const lines: string[] = [];
   const title = details.businessName?.trim() || details.branchAlias?.trim();
-  if (title) lines.push(...wrapCentered(title.toUpperCase()));
-  if (details.branchAlias?.trim()) lines.push(centerLine(`Branch Code: ${details.branchAlias.trim()}`));
+  if (title) lines.push(...wrapLeft(title.toUpperCase()));
+  if (details.branchAlias?.trim()) lines.push(...wrapLeft(`Branch Code: ${details.branchAlias.trim()}`));
   pushDetail(lines, "Address", details.branchAddress);
-  pushDetail(lines, "City", details.branchCity);
-  pushDetail(lines, "State", details.branchState);
-  pushDetail(lines, "Country", details.branchCountry);
-  pushDetail(lines, "Phone", details.branchPhone);
-  pushDetail(lines, "Mobile", details.branchPhoneMobile);
+  const phone = details.branchPhoneMobile?.trim() || details.branchPhone?.trim();
+  pushDetail(lines, "Phone", phone);
   pushDetail(lines, "Email", details.branchEmail);
-  pushDetail(lines, "Website", details.branchWebsiteUrl);
+  // pushDetail(lines, "Website", details.branchWebsiteUrl);
   if (!lines.length) return "";
   return `${lines.join("\n")}\n${RULE}\n`;
 }
@@ -261,7 +250,7 @@ export async function printMartReceipt(plainText: string): Promise<boolean> {
   if (!printWindow) return false;
   printWindow.document.write(`<!DOCTYPE html><html><head><title>POS Receipt</title><style>
     body { font-family: 'Courier New', monospace; margin: 0; padding: 10px; width: 80mm; max-width: 100%; background: white; color: black; }
-    pre { margin: 0; font-size: 12px; line-height: 1.4; white-space: pre-wrap; word-wrap: break-word; }
+    pre { margin: 0; font-size: 12px; line-height: 1.4; white-space: pre-wrap; word-wrap: break-word; text-align: left; }
     @media print { body { width: 80mm; margin: 0; padding: 0; } @page { size: 80mm auto; margin: 0; } }
   </style></head><body><pre>${escapeHtml(plainText)}</pre>
   <script>window.print(); window.onafterprint = function() { window.close(); };</script></body></html>`);
