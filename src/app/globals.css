@@ -111,6 +111,27 @@ input.pin-box.bad { border-color: var(--danger); }
 .modal h2 { margin: 0 0 8px; color: var(--brand-dark); }
 .modal p { color: var(--muted); }
 .void-modal { text-align: center; }
+.unknown-barcode {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin: 10px 0; padding: 10px 12px; border: 1px dashed var(--border); border-radius: 10px;
+  background: var(--tint);
+}
+.unknown-barcode p { margin: 0; color: var(--brand-dark); }
+.unknown-barcode .primary { flex-shrink: 0; padding: 10px 14px; }
+.smart-modal { text-align: left; }
+.smart-modal .smart-code { margin: 0 0 10px; color: var(--muted); font-size: 13px; }
+.smart-thumb {
+  display: block; width: 96px; height: 96px; object-fit: contain;
+  margin: 0 0 12px; border: 1px solid var(--border); border-radius: 10px; background: #fff;
+}
+.smart-categories {
+  display: flex; flex-direction: column; gap: 6px;
+  max-height: 160px; overflow: auto; margin: 8px 0 12px;
+}
+.smart-categories .hit { width: 100%; }
+.smart-categories .hit.on {
+  border-color: var(--brand); background: var(--tint); color: var(--brand-dark);
+}
 .bank-modal { width: min(520px, 100%); }
 .bank-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
 .bank-card {

@@ -21,7 +21,7 @@ const DRAWER = gql`
 const LOOKUP = gql`
   query lookupMartBarcode($code: String!) {
     lookupMartBarcode(code: $code) {
-      productId variantId name barcode sku unitPrice unitOfMeasure quantityOnHand
+      productId variantId name barcode sku unitPrice unitOfMeasure quantityOnHand trackInventory
     }
   }
 `;
@@ -29,7 +29,7 @@ const LOOKUP = gql`
 const SEARCH = gql`
   query searchMartCatalog($term: String!) {
     searchMartCatalog(term: $term) {
-      productId variantId name barcode sku unitPrice unitOfMeasure quantityOnHand
+      productId variantId name barcode sku unitPrice unitOfMeasure quantityOnHand trackInventory
     }
   }
 `;
@@ -43,7 +43,37 @@ const CATEGORIES = gql`
 const CATEGORY_PRODUCTS = gql`
   query martCategoryProducts($categoryId: ID!) {
     martCategoryProducts(categoryId: $categoryId) {
-      productId variantId name barcode sku unitPrice unitOfMeasure quantityOnHand
+      productId variantId name barcode sku unitPrice unitOfMeasure quantityOnHand trackInventory
+    }
+  }
+`;
+
+const SMART_LOOKUP = gql`
+  query martSmartBarcodeLookup($code: String!) {
+    martSmartBarcodeLookup(code: $code) {
+      barcode name imageUrl brand found
+    }
+  }
+`;
+
+const CREATE_SMART = gql`
+  mutation createMartSmartProduct(
+    $barcode: String!
+    $name: String!
+    $sellingPrice: String!
+    $categoryId: ID!
+    $imageUrl: String
+  ) {
+    createMartSmartProduct(
+      barcode: $barcode
+      name: $name
+      sellingPrice: $sellingPrice
+      categoryId: $categoryId
+      imageUrl: $imageUrl
+    ) {
+      item {
+        productId variantId name barcode sku unitPrice unitOfMeasure quantityOnHand trackInventory
+      }
     }
   }
 `;
@@ -207,6 +237,7 @@ type Item = {
   unitPrice: string;
   unitOfMeasure?: string | null;
   quantityOnHand?: string | null;
+  trackInventory?: boolean | null;
 };
 
 type CartLine = Item & { quantity: number };
@@ -248,9 +279,16 @@ function stockAmount(value?: string | null) {
   return Number.isFinite(amount) ? amount : null;
 }
 
-function outOfStock(item: { quantityOnHand?: string | null }) {
+function outOfStock(item: { quantityOnHand?: string | null; trackInventory?: boolean | null }) {
+  if (item.trackInventory === false) return false;
   const amount = stockAmount(item.quantityOnHand);
   return amount != null && amount <= 0;
+}
+
+function looksLikeBarcode(code: string) {
+  const clean = code.trim();
+  if (!clean || /\s/.test(clean)) return false;
+  return /^[0-9A-Za-z-]{6,32}$/.test(clean);
 }
 
 function stockText(value?: string | null) {
@@ -355,6 +393,17 @@ export default function TillPage() {
   const [cashierMenu, setCashierMenu] = useState(false);
   const [categoryId, setCategoryId] = useState("");
   const [categoryName, setCategoryName] = useState("");
+  const [unknownBarcode, setUnknownBarcode] = useState("");
+  const [smartOpen, setSmartOpen] = useState(false);
+  const [smartLoading, setSmartLoading] = useState(false);
+  const [smartSaving, setSmartSaving] = useState(false);
+  const [smartError, setSmartError] = useState("");
+  const [smartName, setSmartName] = useState("");
+  const [smartPrice, setSmartPrice] = useState("");
+  const [smartImageUrl, setSmartImageUrl] = useState("");
+  const [smartFound, setSmartFound] = useState(false);
+  const [smartCategoryId, setSmartCategoryId] = useState("");
+  const [smartCategoryQuery, setSmartCategoryQuery] = useState("");
   const cashierMenuRef = useRef<HTMLDivElement>(null);
 
   const drawerQuery = useQuery(DRAWER, { skip: !getToken() });
@@ -371,6 +420,7 @@ export default function TillPage() {
   const [lookup] = useLazyQuery(LOOKUP);
   const [lookupLoyalty, { data: loyaltyData }] = useLazyQuery(LOYALTY);
   const [search] = useLazyQuery(SEARCH);
+  const [smartLookup] = useLazyQuery(SMART_LOOKUP);
   const categoriesQuery = useQuery(CATEGORIES, { skip: !getToken() });
   const [loadCategoryProducts, categoryProductsQuery] = useLazyQuery(CATEGORY_PRODUCTS);
   const [openDrawer, { loading: opening }] = useMutation(OPEN_DRAWER);
@@ -380,6 +430,7 @@ export default function TillPage() {
   const [voidTicket, { loading: voiding }] = useMutation(VOID);
   const [authorizePin, { loading: authorizingReprint }] = useMutation(AUTHORIZE_PIN);
   const [unlockTill, { loading: unlocking }] = useMutation(UNLOCK);
+  const [createSmartProduct] = useMutation(CREATE_SMART);
 
   useEffect(() => {
     if (!getToken()) router.replace(propertyPath("/login"));
@@ -511,14 +562,107 @@ export default function TillPage() {
     return () => window.clearTimeout(handle);
   }, [scan, search]);
 
+  function markUnknown(code: string) {
+    setUnknownBarcode(code);
+    setHits([]);
+    setError("Unknown product");
+  }
+
+  async function openSmartSetup(code = unknownBarcode || scan.trim()) {
+    const barcode = code.trim();
+    if (!barcode) return;
+    setUnknownBarcode(barcode);
+    setSmartOpen(true);
+    setSmartError("");
+    setSmartName("");
+    setSmartPrice("");
+    setSmartImageUrl("");
+    setSmartFound(false);
+    setSmartCategoryId("");
+    setSmartCategoryQuery("");
+    setSmartLoading(true);
+    try {
+      const result = await smartLookup({ variables: { code: barcode }, fetchPolicy: "network-only" });
+      const message = resultError(result);
+      if (message) {
+        setSmartError(message);
+        return;
+      }
+      const row = (result.data?.martSmartBarcodeLookup ?? result.data?.data?.martSmartBarcodeLookup) as
+        | { barcode?: string; name?: string; imageUrl?: string; found?: boolean }
+        | undefined;
+      setSmartName((row?.name || "").trim());
+      setSmartImageUrl((row?.imageUrl || "").trim());
+      setSmartFound(Boolean(row?.found));
+      if (!row?.found) setSmartError("No internet match. Enter the name, price, and category.");
+    } catch (err) {
+      setSmartError(errorText(err));
+    } finally {
+      setSmartLoading(false);
+    }
+  }
+
+  async function saveSmartSetup() {
+    const barcode = unknownBarcode.trim();
+    const name = smartName.trim();
+    const price = smartPrice.trim();
+    if (!barcode) {
+      setSmartError("Scan a barcode first.");
+      return;
+    }
+    if (!name) {
+      setSmartError("Enter a product name.");
+      return;
+    }
+    if (!price || !(Number(price) > 0)) {
+      setSmartError("Enter a selling price.");
+      return;
+    }
+    if (!smartCategoryId) {
+      setSmartError("Choose a category.");
+      return;
+    }
+    setSmartSaving(true);
+    setSmartError("");
+    try {
+      const result = await createSmartProduct({
+        variables: {
+          barcode,
+          name,
+          sellingPrice: price,
+          categoryId: smartCategoryId,
+          imageUrl: smartImageUrl || null,
+        },
+      });
+      const message = resultError(result);
+      const item = (result.data?.createMartSmartProduct?.item ??
+        result.data?.data?.createMartSmartProduct?.item) as Item | undefined;
+      if (message || !item?.productId) {
+        setSmartError(message || "This product could not be saved.");
+        return;
+      }
+      setSmartOpen(false);
+      setUnknownBarcode("");
+      setError("");
+      setNotice(`${item.name} added to catalog`);
+      addItem(item);
+      void categoriesQuery.refetch();
+    } catch (err) {
+      setSmartError(errorText(err));
+    } finally {
+      setSmartSaving(false);
+    }
+  }
+
   async function onScan(event: FormEvent) {
     event.preventDefault();
     setError("");
+    setUnknownBarcode("");
     const code = scan.trim();
     if (!code) return;
     try {
       const result = await lookup({ variables: { code }, fetchPolicy: "network-only" });
-      const item = result.data?.lookupMartBarcode as Item | undefined;
+      const item = (result.data?.lookupMartBarcode ?? result.data?.data?.lookupMartBarcode) as Item | undefined;
       if (item?.productId) {
         addItem(item);
         return;
@@ -528,12 +672,19 @@ export default function TillPage() {
     }
     try {
       const result = await search({ variables: { term: code }, fetchPolicy: "network-only" });
-      const rows = (result.data?.searchMartCatalog || []) as Item[];
+      const rows = (result.data?.searchMartCatalog || result.data?.data?.searchMartCatalog || []) as Item[];
       setHits(rows);
-      if (rows.length === 1) addItem(rows[0]);
-      else if (rows.length === 0) setError("Product not found");
+      if (rows.length === 1) {
+        addItem(rows[0]);
+        return;
+      }
+      if (rows.length === 0) {
+        if (looksLikeBarcode(code)) markUnknown(code);
+        else setError("Product not found");
+      }
     } catch (err) {
-      setError(errorText(err));
+      if (looksLikeBarcode(code)) markUnknown(code);
+      else setError(errorText(err));
     }
   }
 
@@ -883,7 +1034,10 @@ export default function TillPage() {
               <input
                 ref={scanRef}
                 value={scan}
-                onChange={(event) => setScan(event.target.value)}
+                onChange={(event) => {
+                  setScan(event.target.value);
+                  if (unknownBarcode) setUnknownBarcode("");
+                }}
                 placeholder="Type a product name or scan a barcode"
                 autoFocus
               />
@@ -913,6 +1067,16 @@ export default function TillPage() {
             ))}
           </div>
           <p className="error">{error}</p>
+          {unknownBarcode ? (
+            <div className="unknown-barcode no-print">
+              <p>
+                <strong>Unknown</strong> · {unknownBarcode}
+              </p>
+              <button className="primary" type="button" onClick={() => void openSmartSetup(unknownBarcode)}>
+                Smart setup
+              </button>
+            </div>
+          ) : null}
           <p className="ok">{notice}</p>
           {receipt ? (
             <div className="receipt" id="receipt">
@@ -1202,6 +1366,99 @@ export default function TillPage() {
             <div className="actions">
               <button className="ghost" type="button" onClick={() => setReprintOpen(false)} disabled={authorizingReprint}>
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {smartOpen ? (
+        <div className="modal-back" role="presentation">
+          <div className="modal smart-modal" role="dialog" aria-labelledby="smart-title">
+            <h2 id="smart-title">Smart setup</h2>
+            <p className="smart-code">Barcode {unknownBarcode}</p>
+            {smartLoading ? <p>Looking up this product…</p> : null}
+            {!smartLoading && smartImageUrl ? <img className="smart-thumb" src={smartImageUrl} alt="" /> : null}
+            {!smartLoading && !smartFound && !smartError ? (
+              <p>No internet match. Enter the name, price, and category.</p>
+            ) : null}
+            <label>
+              Product name
+              <input
+                value={smartName}
+                onChange={(event) => {
+                  setSmartName(event.target.value);
+                  setSmartError("");
+                }}
+                disabled={smartLoading || smartSaving}
+                placeholder="Product name"
+              />
+            </label>
+            <label>
+              Selling price
+              <input
+                value={smartPrice}
+                onChange={(event) => {
+                  setSmartPrice(event.target.value);
+                  setSmartError("");
+                }}
+                inputMode="decimal"
+                disabled={smartLoading || smartSaving}
+                placeholder="0.00"
+              />
+            </label>
+            <label>
+              Category
+              <input
+                value={smartCategoryQuery}
+                onChange={(event) => {
+                  setSmartCategoryQuery(event.target.value);
+                  setSmartError("");
+                }}
+                disabled={smartLoading || smartSaving}
+                placeholder="Search category"
+              />
+            </label>
+            <div className="smart-categories">
+              {(categoriesQuery.data?.martCategories || categoriesQuery.data?.data?.martCategories || [])
+                .filter((category: { id: string; name: string }) => {
+                  const term = smartCategoryQuery.trim().toLowerCase();
+                  if (!term) return true;
+                  return category.name.toLowerCase().includes(term);
+                })
+                .slice(0, 8)
+                .map((category: { id: string; name: string }) => (
+                  <button
+                    className={smartCategoryId === category.id ? "hit on" : "hit"}
+                    type="button"
+                    key={category.id}
+                    disabled={smartLoading || smartSaving}
+                    onClick={() => {
+                      setSmartCategoryId(category.id);
+                      setSmartCategoryQuery(category.name);
+                      setSmartError("");
+                    }}
+                  >
+                    <span>{category.name}</span>
+                  </button>
+                ))}
+            </div>
+            {smartError ? <p className="error">{smartError}</p> : null}
+            <div className="actions">
+              <button
+                className="ghost"
+                type="button"
+                onClick={() => setSmartOpen(false)}
+                disabled={smartSaving}
+              >
+                Cancel
+              </button>
+              <button
+                className="primary"
+                type="button"
+                onClick={() => void saveSmartSetup()}
+                disabled={smartLoading || smartSaving}
+              >
+                {smartSaving ? "Saving…" : "Save"}
               </button>
             </div>
           </div>
