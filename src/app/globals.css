@@ -120,6 +120,7 @@ input.pin-box.bad { border-color: var(--danger); }
 .unknown-barcode .primary { flex-shrink: 0; padding: 10px 14px; }
 .smart-modal { text-align: left; }
 .smart-modal .smart-code { margin: 0 0 10px; color: var(--muted); font-size: 13px; }
+.smart-modal .smart-source { margin: 0 0 10px; color: var(--brand-dark); font-size: 13px; font-weight: 600; }
 .smart-thumb {
   display: block; width: 96px; height: 96px; object-fit: contain;
   margin: 0 0 12px; border: 1px solid var(--border); border-radius: 10px; background: #fff;

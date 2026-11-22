@@ -51,7 +51,7 @@ const CATEGORY_PRODUCTS = gql`
 const SMART_LOOKUP = gql`
   query martSmartBarcodeLookup($code: String!) {
     martSmartBarcodeLookup(code: $code) {
-      barcode name imageUrl brand found
+      barcode name imageUrl brand found source
     }
   }
 `;
@@ -300,6 +300,23 @@ function stockText(value?: string | null) {
   return `stock ${text}`;
 }
 
+function smartSourceLabel(source?: string | null) {
+  switch ((source || "").trim().toLowerCase()) {
+    case "openfoodfacts":
+      return "Open Food Facts";
+    case "openbeautyfacts":
+      return "Open Beauty Facts";
+    case "openproductsfacts":
+      return "Open Products Facts";
+    case "upcitemdb":
+      return "UPCitemdb";
+    case "go-upc":
+      return "Go-UPC";
+    default:
+      return source || "internet lookup";
+  }
+}
+
 function errorText(error: unknown) {
   const graph = (error as { graphQLErrors?: { message?: string }[] })?.graphQLErrors?.[0]?.message;
   if (graph) return graph;
@@ -405,6 +422,7 @@ export default function TillPage() {
   const [smartStock, setSmartStock] = useState("");
   const [smartImageUrl, setSmartImageUrl] = useState("");
   const [smartFound, setSmartFound] = useState(false);
+  const [smartSource, setSmartSource] = useState("");
   const [smartCategoryId, setSmartCategoryId] = useState("");
   const [smartCategoryQuery, setSmartCategoryQuery] = useState("");
   const cashierMenuRef = useRef<HTMLDivElement>(null);
@@ -582,6 +600,7 @@ export default function TillPage() {
     setSmartStock("");
     setSmartImageUrl("");
     setSmartFound(false);
+    setSmartSource("");
     setSmartCategoryId("");
     setSmartCategoryQuery("");
     setSmartLoading(true);
@@ -593,12 +612,15 @@ export default function TillPage() {
         return;
       }
       const row = (result.data?.martSmartBarcodeLookup ?? result.data?.data?.martSmartBarcodeLookup) as
-        | { barcode?: string; name?: string; imageUrl?: string; found?: boolean }
+        | { barcode?: string; name?: string; imageUrl?: string; found?: boolean; source?: string }
         | undefined;
       setSmartName((row?.name || "").trim());
       setSmartImageUrl((row?.imageUrl || "").trim());
       setSmartFound(Boolean(row?.found));
-      if (!row?.found) setSmartError("No internet match. Enter the name, price, and category.");
+      setSmartSource((row?.source || "").trim());
+      if (!row?.found) {
+        setSmartError("No internet match across food, beauty, and general product databases. Enter the name, price, and category.");
+      }
     } catch (err) {
       setSmartError(errorText(err));
     } finally {
@@ -1390,8 +1412,11 @@ export default function TillPage() {
           <div className="modal smart-modal" role="dialog" aria-labelledby="smart-title">
             <h2 id="smart-title">Smart setup</h2>
             <p className="smart-code">Barcode {unknownBarcode}</p>
-            {smartLoading ? <p>Looking up this product…</p> : null}
+            {smartLoading ? <p>Looking up food, beauty, and general product databases…</p> : null}
             {!smartLoading && smartImageUrl ? <img className="smart-thumb" src={smartImageUrl} alt="" /> : null}
+            {!smartLoading && smartFound && smartSource ? (
+              <p className="smart-source">Matched via {smartSourceLabel(smartSource)}</p>
+            ) : null}
             {!smartLoading && !smartFound && !smartError ? (
               <p>No internet match. Enter the name, price, and category.</p>
             ) : null}
