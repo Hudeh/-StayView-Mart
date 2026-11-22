@@ -63,6 +63,7 @@ const CREATE_SMART = gql`
     $sellingPrice: String!
     $categoryId: ID!
     $imageUrl: String
+    $stockQuantity: String
   ) {
     createMartSmartProduct(
       barcode: $barcode
@@ -70,6 +71,7 @@ const CREATE_SMART = gql`
       sellingPrice: $sellingPrice
       categoryId: $categoryId
       imageUrl: $imageUrl
+      stockQuantity: $stockQuantity
     ) {
       item {
         productId variantId name barcode sku unitPrice unitOfMeasure quantityOnHand trackInventory
@@ -400,6 +402,7 @@ export default function TillPage() {
   const [smartError, setSmartError] = useState("");
   const [smartName, setSmartName] = useState("");
   const [smartPrice, setSmartPrice] = useState("");
+  const [smartStock, setSmartStock] = useState("");
   const [smartImageUrl, setSmartImageUrl] = useState("");
   const [smartFound, setSmartFound] = useState(false);
   const [smartCategoryId, setSmartCategoryId] = useState("");
@@ -576,6 +579,7 @@ export default function TillPage() {
     setSmartError("");
     setSmartName("");
     setSmartPrice("");
+    setSmartStock("");
     setSmartImageUrl("");
     setSmartFound(false);
     setSmartCategoryId("");
@@ -622,6 +626,11 @@ export default function TillPage() {
       setSmartError("Choose a category.");
       return;
     }
+    const stock = smartStock.trim();
+    if (stock && !(Number(stock) >= 0)) {
+      setSmartError("Enter a valid stock quantity.");
+      return;
+    }
     setSmartSaving(true);
     setSmartError("");
     try {
@@ -632,6 +641,7 @@ export default function TillPage() {
           sellingPrice: price,
           categoryId: smartCategoryId,
           imageUrl: smartImageUrl || null,
+          stockQuantity: stock || null,
         },
       });
       const message = resultError(result);
@@ -644,7 +654,11 @@ export default function TillPage() {
       setSmartOpen(false);
       setUnknownBarcode("");
       setError("");
-      setNotice(`${item.name} added to catalog`);
+      const stockNote =
+        item.trackInventory && item.quantityOnHand
+          ? ` · stock ${item.quantityOnHand}`
+          : "";
+      setNotice(`${item.name} added to catalog${stockNote}`);
       addItem(item);
       void categoriesQuery.refetch();
     } catch (err) {
@@ -1404,6 +1418,19 @@ export default function TillPage() {
                 inputMode="decimal"
                 disabled={smartLoading || smartSaving}
                 placeholder="0.00"
+              />
+            </label>
+            <label>
+              Stock quantity
+              <input
+                value={smartStock}
+                onChange={(event) => {
+                  setSmartStock(event.target.value);
+                  setSmartError("");
+                }}
+                inputMode="numeric"
+                disabled={smartLoading || smartSaving}
+                placeholder="0"
               />
             </label>
             <label>
