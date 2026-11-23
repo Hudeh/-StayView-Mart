@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, ipcMain, Menu } = require("electron");
 const { spawn } = require("child_process");
 const os = require("os");
 const path = require("path");
@@ -55,6 +55,11 @@ const APP_NAME = "StayView Mart";
 const APP_USER_MODEL_ID = "com.stayview.mart";
 app.setName(APP_NAME);
 if (process.platform === "win32") app.setAppUserModelId(APP_USER_MODEL_ID);
+
+/** Production / packaged builds: no Electron File/Edit/View menu bar. */
+const hideAppMenu =
+  process.env.ELECTRON_SHOW_MENU !== "1" &&
+  (process.env.NODE_ENV === "production" || app.isPackaged);
 
 const PORT = process.env.NEXT_PUBLIC_APP_PORT || "3003";
 const APP_PROTOCOL = process.env.NEXT_PUBLIC_APP_PROTOCOL || "http";
@@ -170,6 +175,7 @@ function createMainWindow(propertyCode, explicitUrl) {
     minHeight: 640,
     title: APP_NAME,
     icon: windowIcon(),
+    autoHideMenuBar: hideAppMenu,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -455,6 +461,9 @@ ipcMain.handle("print-raw-network", async (_event, payload) => {
 });
 
 app.whenReady().then(() => {
+  if (hideAppMenu) {
+    Menu.setApplicationMenu(null);
+  }
   const fixedUrl = explicitAppUrl();
   if (fixedUrl) {
     createMainWindow("", fixedUrl);
